@@ -1,0 +1,32 @@
+# Core Django dependencies
+Django==5.2
+djangorestframework==3.15.2
+django-cors-headers==4.5.0
+psycopg2-binary==2.9.9
+gunicorn==23.0.0
+whitenoise==6.8.2
+
+# Environment management
+python-decouple==3.8
+dj-database-url==2.2.0
+
+# Image processing and basic file handling
+Pillow==10.4.0
+python-magic==0.4.27
+
+# Data processing
+pandas==2.2.3
+numpy==1.26.4
+
+# Optional geospatial libraries (with fallback handling)
+# These may not be available on all platforms
+rasterio==1.4.1
+Fiona==1.10.1
+Shapely==2.0.6
+pyproj==3.6.1
+cartopy==0.23.0
+netCDF4==1.7.1
+h5py==3.12.1
+
+# Additional utilities
+requests==2.32.3
