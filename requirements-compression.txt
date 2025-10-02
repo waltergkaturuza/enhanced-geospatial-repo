@@ -1,0 +1,17 @@
+# Optional dependencies for additional compression format support
+# Install these packages to enable RAR and 7Z support for AOI uploads
+
+# For RAR file support (.rar files)
+# Note: Also requires 'unrar' command-line tool to be installed
+rarfile>=4.0
+
+# For 7Z file support (.7z files)
+py7zr>=0.20.0
+
+# Installation instructions:
+# pip install rarfile py7zr
+#
+# For RAR support on different platforms:
+# - Windows: Download and install WinRAR or 7-Zip
+# - Linux: sudo apt-get install unrar  (Ubuntu/Debian) or sudo yum install unrar (CentOS/RHEL)
+# - macOS: brew install unrar

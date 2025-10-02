@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Permissions</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { color: green; }
+        .error { color: red; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Permission Debug Tool</h1>
+    
+    <div class="section">
+        <h2>Login Test</h2>
+        <button onclick="testLogin()">Test Login</button>
+        <div id="loginResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>User Data</h2>
+        <div id="userData"></div>
+    </div>
+
+    <div class="section">
+        <h2>Permission Tests</h2>
+        <button onclick="testPermissions()">Test All Permissions</button>
+        <div id="permissionResults"></div>
+    </div>
+
+    <script>
+        async function testLogin() {
+            const resultDiv = document.getElementById('loginResult');
+            try {
+                const response = await fetch('http://localhost:8000/api/auth/login/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@example.com',
+                        password: 'admin123'
+                    })
+                });
+                
+                const data = await response.json();
+                resultDiv.innerHTML = `<pre class="success">${JSON.stringify(data, null, 2)}</pre>`;
+                
+                // Store the user data for permission tests
+                window.testUser = data.user;
+                updateUserData();
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        function updateUserData() {
+            const userDiv = document.getElementById('userData');
+            if (window.testUser) {
+                userDiv.innerHTML = `<pre class="success">${JSON.stringify(window.testUser, null, 2)}</pre>`;
+            } else {
+                userDiv.innerHTML = '<div class="error">No user data. Login first.</div>';
+            }
+        }
+
+        function testPermissions() {
+            const resultDiv = document.getElementById('permissionResults');
+            
+            if (!window.testUser) {
+                resultDiv.innerHTML = '<div class="error">No user data. Login first.</div>';
+                return;
+            }
+
+            const user = window.testUser;
+            const permissions = ['admin_access', 'manage_users', 'system_management', 'view_data', 'download_data'];
+            const modules = ['dashboard', 'imagery', 'analytics', 'admin', 'business'];
+            
+            let html = '<h3>Permission Tests:</h3>';
+            
+            // Test permissions
+            permissions.forEach(permission => {
+                let hasPermission = false;
+                
+                if (user.role === 'admin') {
+                    hasPermission = true;
+                } else {
+                    switch (permission) {
+                        case 'admin_access':
+                        case 'manage_users':
+                        case 'system_management':
+                            hasPermission = user.role === 'admin';
+                            break;
+                        case 'view_data':
+                        case 'download_data':
+                            hasPermission = ['admin', 'user', 'viewer'].includes(user.role);
+                            break;
+                        default:
+                            hasPermission = false;
+                    }
+                }
+                
+                html += `<div>${permission}: <span class="${hasPermission ? 'success' : 'error'}">${hasPermission}</span></div>`;
+            });
+            
+            html += '<h3>Module Access Tests:</h3>';
+            
+            // Test module access
+            modules.forEach(module => {
+                let hasAccess = false;
+                
+                if (user.role === 'admin') {
+                    hasAccess = true;
+                } else {
+                    hasAccess = user.modules && user.modules.includes(module);
+                }
+                
+                html += `<div>${module}: <span class="${hasAccess ? 'success' : 'error'}">${hasAccess}</span></div>`;
+            });
+            
+            resultDiv.innerHTML = html;
+        }
+
+        // Initialize
+        updateUserData();
+    </script>
+</body>
+</html>

@@ -1,0 +1,804 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Upload, File, Settings, Database, AlertTriangle, CheckCircle, X, Info, Satellite, MapPin } from 'lucide-react';
+import { cn } from '../lib/utils';
+
+interface MetadataField {
+  key: string;
+  value: string;
+  type: 'string' | 'number' | 'array' | 'coordinate' | 'date';
+  group?: string;
+  description?: string;
+}
+
+interface UploadedFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  status: 'pending' | 'processing' | 'completed' | 'error';
+  metadata?: MetadataField[];
+  preview?: string;
+}
+
+const SystemManagement: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'upload' | 'metadata' | 'processing' | 'database'>('upload');
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [metadataText, setMetadataText] = useState('');
+  const [parsedMetadata, setParsedMetadata] = useState<MetadataField[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Enhanced sample metadata template for Landsat imagery
+  const sampleMetadata = `GROUP = L1_METADATA_FILE
+  GROUP = METADATA_FILE_INFO
+    ORIGIN = "Image courtesy of the U.S. Geological Survey"
+    REQUEST_ID = "0501906082000_00011"
+    LANDSAT_SCENE_ID = "LC81690732024213LGN00"
+    FILE_DATE = 2024-08-01T10:30:45Z
+    STATION_ID = "LGN"
+    PROCESSING_SOFTWARE_VERSION = "LPGS_2.12.0"
+  END_GROUP = METADATA_FILE_INFO
+  
+  GROUP = PRODUCT_METADATA
+    DATA_TYPE = "L1TP"
+    COLLECTION_NUMBER = 02
+    COLLECTION_CATEGORY = "T1"
+    ELEVATION_SOURCE = "SRTM"
+    OUTPUT_FORMAT = "GEOTIFF"
+    SPACECRAFT_ID = "LANDSAT_8"
+    SENSOR_ID = "OLI_TIRS"
+    DATE_ACQUIRED = 2024-08-01
+    SCENE_CENTER_TIME = "10:30:45.123456Z"
+    WRS_PATH = 169
+    WRS_ROW = 073
+    TARGET_WRS_PATH = 169
+    TARGET_WRS_ROW = 073
+    CLOUD_COVER = 15.23
+    CLOUD_COVER_LAND = 12.45
+    IMAGE_QUALITY_OLI = 9
+    IMAGE_QUALITY_TIRS = 9
+    SATURATION_BAND_1 = "N"
+    SATURATION_BAND_2 = "N"
+    SATURATION_BAND_3 = "N"
+    SATURATION_BAND_4 = "N"
+    SATURATION_BAND_5 = "N"
+    SATURATION_BAND_6 = "N"
+    SATURATION_BAND_7 = "N"
+    SATURATION_BAND_8 = "N"
+    SATURATION_BAND_9 = "N"
+  END_GROUP = PRODUCT_METADATA
+  
+  GROUP = IMAGE_ATTRIBUTES
+    EARTH_SUN_DISTANCE = 1.0158326
+    SUN_AZIMUTH = 32.12345678
+    SUN_ELEVATION = 45.67891234
+    GROUND_CONTROL_POINTS_VERSION = 4
+    GROUND_CONTROL_POINTS_MODEL = 544
+    GEOMETRIC_RMSE_MODEL = 5.123
+    GEOMETRIC_RMSE_MODEL_Y = 3.456
+    GEOMETRIC_RMSE_MODEL_X = 3.789
+  END_GROUP = IMAGE_ATTRIBUTES
+  
+  GROUP = PROJECTION_PARAMETERS
+    MAP_PROJECTION = "UTM"
+    DATUM = "WGS84"
+    ELLIPSOID = "WGS84"
+    UTM_ZONE = 36
+    GRID_CELL_SIZE_PANCHROMATIC = 15.00
+    GRID_CELL_SIZE_REFLECTIVE = 30.00
+    GRID_CELL_SIZE_THERMAL = 100.00
+    ORIENTATION = "NORTH_UP"
+    RESAMPLING_OPTION = "CUBIC_CONVOLUTION"
+  END_GROUP = PROJECTION_PARAMETERS
+  
+  GROUP = LEVEL1_PROJECTION_PARAMETERS
+    REFERENCE_DATUM = "WGS84"
+    REFERENCE_ELLIPSOID = "WGS84"
+    GRID_CELL_SIZE_PANCHROMATIC = 15.00
+    GRID_CELL_SIZE_REFLECTIVE = 30.00
+    GRID_CELL_SIZE_THERMAL = 100.00
+    ORIENTATION = "NORTH_UP"
+    RESAMPLING_OPTION = "CUBIC_CONVOLUTION"
+    MAP_PROJECTION = "UTM"
+    UTM_ZONE = 36
+    UL_CORNER = (252300.000, -1962300.000)
+    UR_CORNER = (480600.000, -1962300.000)
+    LL_CORNER = (252300.000, -2193900.000)
+    LR_CORNER = (480600.000, -2193900.000)
+    UL_CORNER_LATLON = (-17.73456789, 26.12345678)
+    UR_CORNER_LATLON = (-17.73456789, 28.45678901)
+    LL_CORNER_LATLON = (-19.78901234, 26.12345678)
+    LR_CORNER_LATLON = (-19.78901234, 28.45678901)
+  END_GROUP = LEVEL1_PROJECTION_PARAMETERS
+END_GROUP = L1_METADATA_FILE`;
+
+  const parseMetadata = (text: string): MetadataField[] => {
+    const fields: MetadataField[] = [];
+    const lines = text.split('\n');
+    let currentGroup = '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      
+      if (trimmed.startsWith('GROUP = ')) {
+        currentGroup = trimmed.replace('GROUP = ', '');
+        continue;
+      }
+      
+      if (trimmed.startsWith('END_GROUP')) {
+        currentGroup = '';
+        continue;
+      }
+
+      if (trimmed.includes(' = ')) {
+        const [key, ...valueParts] = trimmed.split(' = ');
+        const value = valueParts.join(' = '); // Handle values with '=' in them
+        let type: 'string' | 'number' | 'array' | 'coordinate' | 'date' = 'string';
+        let description = '';
+
+        // Determine field type and add descriptions
+        if (value.startsWith('(') && value.endsWith(')')) {
+          if (key.includes('CORNER')) {
+            type = 'coordinate';
+            description = 'Geographic coordinate pair (X, Y)';
+          } else {
+            type = 'array';
+            description = 'Array of values';
+          }
+        } else if (value.match(/^\d{4}-\d{2}-\d{2}/) || value.includes('T') && value.includes('Z')) {
+          type = 'date';
+          description = 'Date/time value';
+        } else if (!isNaN(parseFloat(value.replace(/"/g, '')))) {
+          type = 'number';
+          if (key.includes('CLOUD_COVER')) {
+            description = 'Cloud coverage percentage';
+          } else if (key.includes('ELEVATION')) {
+            description = 'Sun elevation angle in degrees';
+          } else if (key.includes('AZIMUTH')) {
+            description = 'Sun azimuth angle in degrees';
+          } else if (key.includes('RMSE')) {
+            description = 'Root Mean Square Error';
+          } else if (key.includes('GRID_CELL_SIZE')) {
+            description = 'Pixel size in meters';
+          }
+        } else {
+          if (key.includes('SCENE_ID')) {
+            description = 'Unique scene identifier';
+          } else if (key.includes('SPACECRAFT_ID')) {
+            description = 'Satellite name';
+          } else if (key.includes('SENSOR_ID')) {
+            description = 'Sensor instrument';
+          } else if (key.includes('DATA_TYPE')) {
+            description = 'Processing level';
+          } else if (key.includes('WRS_PATH') || key.includes('WRS_ROW')) {
+            description = 'Worldwide Reference System coordinate';
+          }
+        }
+
+        fields.push({
+          key: key.trim(),
+          value: value.trim(),
+          type,
+          group: currentGroup,
+          description
+        });
+      }
+    }
+
+    return fields;
+  };
+
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files) return;
+
+    for (const file of Array.from(files)) {
+      const newFile: UploadedFile = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        status: 'pending'
+      };
+
+      setUploadedFiles(prev => [...prev, newFile]);
+      
+      try {
+        // Update to processing status
+        setUploadedFiles(prev => 
+          prev.map(f => f.id === newFile.id ? { ...f, status: 'processing' } : f)
+        );
+
+        // Create FormData for file upload
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('metadata', JSON.stringify({ 
+          filename: file.name,
+          size: file.size,
+          type: file.type
+        }));
+
+        // Upload file to backend
+        const response = await fetch('http://localhost:8000/api/system/upload-files/', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (response.ok) {
+          await response.json(); // Get the result but don't need to use it
+          
+          // If file contains metadata, parse it
+          if (file.name.toLowerCase().includes('metadata') || file.name.toLowerCase().includes('.txt')) {
+            const text = await file.text();
+            const metadata = parseMetadata(text);
+            
+            setUploadedFiles(prev => 
+              prev.map(f => f.id === newFile.id ? { 
+                ...f, 
+                status: 'completed',
+                metadata: metadata
+              } : f)
+            );
+          } else {
+            setUploadedFiles(prev => 
+              prev.map(f => f.id === newFile.id ? { ...f, status: 'completed' } : f)
+            );
+          }
+        } else {
+          throw new Error('Upload failed');
+        }
+      } catch (error) {
+        console.error('File upload error:', error);
+        setUploadedFiles(prev => 
+          prev.map(f => f.id === newFile.id ? { ...f, status: 'error' } : f)
+        );
+      }
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFileUpload(e.dataTransfer.files);
+  };
+
+  const handleMetadataSubmit = async () => {
+    if (!metadataText.trim()) return;
+
+    try {
+      // Parse locally first
+      const localParsed = parseMetadata(metadataText);
+      setParsedMetadata(localParsed);
+
+      // Send to backend for processing and storage
+      const response = await fetch('http://localhost:8000/api/system/parse-metadata/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          metadata_text: metadataText,
+          source: 'manual_input',
+          timestamp: new Date().toISOString()
+        }),
+      });
+
+      if (response.ok) {
+        const backendResult = await response.json();
+        console.log('Backend parsing result:', backendResult);
+        
+        // Could merge backend results with local parsing if needed
+        if (backendResult.metadata && Array.isArray(backendResult.metadata)) {
+          setParsedMetadata(backendResult.metadata);
+        }
+      } else {
+        console.warn('Backend metadata parsing failed, using local parsing');
+      }
+    } catch (error) {
+      console.error('Metadata processing error:', error);
+      // Fall back to local parsing
+      const parsed = parseMetadata(metadataText);
+      setParsedMetadata(parsed);
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getStatusIcon = (status: UploadedFile['status']) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'error':
+        return <AlertTriangle className="w-4 h-4 text-red-500" />;
+      case 'processing':
+        return <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />;
+      default:
+        return <File className="w-4 h-4 text-gray-400" />;
+    }
+  };
+
+  const removeFile = (id: string) => {
+    setUploadedFiles(prev => prev.filter(f => f.id !== id));
+  };
+
+  const tabs = [
+    { id: 'upload', label: 'File Upload', icon: Upload },
+    { id: 'metadata', label: 'Metadata Parser', icon: Settings },
+    { id: 'processing', label: 'Processing Queue', icon: Database },
+    { id: 'database', label: 'Database Status', icon: Info }
+  ];
+
+  return (
+    <div className="h-full flex flex-col bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">System Management</h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Upload and manage satellite imagery, boundaries, and metadata
+            </p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <span className="text-sm text-gray-500">
+              {uploadedFiles.filter(f => f.status === 'completed').length} files processed
+            </span>
+            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="bg-white border-b border-gray-200 px-6">
+        <nav className="flex space-x-8">
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={cn(
+                  "flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors",
+                  activeTab === tab.id
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-auto">
+        {activeTab === 'upload' && (
+          <div className="p-6 max-w-4xl mx-auto">
+            {/* Upload Area */}
+            <div className="mb-8">
+              <h2 className="text-lg font-medium text-gray-900 mb-4">Upload Files</h2>
+              <div
+                className={cn(
+                  "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
+                  isDragging
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-300 hover:border-gray-400"
+                )}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Drop files here or click to browse
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  Supports: GeoTIFF, Shapefile (ZIP), JSON, metadata files
+                </p>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Choose Files
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleFileUpload(e.target.files)}
+                  accept=".tif,.tiff,.zip,.json,.txt,.met"
+                />
+              </div>
+            </div>
+
+            {/* File List */}
+            {uploadedFiles.length > 0 && (
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Uploaded Files</h3>
+                <div className="bg-white rounded-lg border border-gray-200">
+                  {uploadedFiles.map(file => (
+                    <div key={file.id} className="flex items-center justify-between p-4 border-b border-gray-200 last:border-b-0">
+                      <div className="flex items-center space-x-3">
+                        {getStatusIcon(file.status)}
+                        <div>
+                          <p className="font-medium text-gray-900">{file.name}</p>
+                          <p className="text-sm text-gray-500">
+                            {formatFileSize(file.size)} • {file.status}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => removeFile(file.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'metadata' && (
+          <div className="p-6 max-w-6xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Metadata Input */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-medium text-gray-900">Metadata Parser</h2>
+                  <button
+                    onClick={() => setMetadataText(sampleMetadata)}
+                    className="text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    Load Sample
+                  </button>
+                </div>
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <textarea
+                    value={metadataText}
+                    onChange={(e) => setMetadataText(e.target.value)}
+                    placeholder="Paste Landsat metadata here..."
+                    className="w-full h-96 font-mono text-sm border-0 resize-none focus:outline-none"
+                  />
+                  <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-200">
+                    <span className="text-sm text-gray-500">
+                      {metadataText.split('\n').length} lines
+                    </span>
+                    <button
+                      onClick={handleMetadataSubmit}
+                      disabled={!metadataText.trim()}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Parse Metadata
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Parsed Results */}
+              <div>
+                <h2 className="text-lg font-medium text-gray-900 mb-4">Parsed Satellite Metadata</h2>
+                <div className="bg-white rounded-lg border border-gray-200 max-h-96 overflow-y-auto">
+                  {parsedMetadata.length > 0 ? (
+                    <div className="divide-y divide-gray-200">
+                      {/* Group metadata by groups */}
+                      {(() => {
+                        const grouped = parsedMetadata.reduce((acc, field) => {
+                          const group = field.group || 'General';
+                          if (!acc[group]) acc[group] = [];
+                          acc[group].push(field);
+                          return acc;
+                        }, {} as Record<string, MetadataField[]>);
+
+                        return Object.entries(grouped).map(([groupName, fields]) => (
+                          <div key={groupName} className="p-4">
+                            <div className="flex items-center space-x-2 mb-3">
+                              <Satellite className="w-4 h-4 text-blue-600" />
+                              <h3 className="font-semibold text-gray-900">{groupName}</h3>
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                {fields.length} fields
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                              {fields.map((field, index) => (
+                                <div key={index} className="bg-gray-50 rounded-lg p-3">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="flex items-center space-x-2 mb-1">
+                                        <span className="font-medium text-gray-900 text-sm">{field.key}</span>
+                                        <span className={cn(
+                                          "text-xs px-2 py-0.5 rounded-full",
+                                          field.type === 'coordinate' ? "bg-green-100 text-green-800" :
+                                          field.type === 'array' ? "bg-blue-100 text-blue-800" :
+                                          field.type === 'number' ? "bg-purple-100 text-purple-800" :
+                                          field.type === 'date' ? "bg-orange-100 text-orange-800" :
+                                          "bg-gray-100 text-gray-800"
+                                        )}>
+                                          {field.type}
+                                        </span>
+                                        {field.type === 'coordinate' && (
+                                          <MapPin className="w-3 h-3 text-green-600" />
+                                        )}
+                                      </div>
+                                      
+                                      <p className="text-sm text-gray-800 font-mono mb-1 break-all">
+                                        {field.value}
+                                      </p>
+                                      
+                                      {field.description && (
+                                        <p className="text-xs text-gray-500 italic">
+                                          {field.description}
+                                        </p>
+                                      )}
+                                      
+                                      {/* Special formatting for important fields */}
+                                      {field.key.includes('SCENE_ID') && (
+                                        <div className="mt-2 p-2 bg-blue-50 rounded text-xs">
+                                          <div className="grid grid-cols-2 gap-1 text-gray-700">
+                                            <span>Sensor:</span>
+                                            <span className="font-medium">{field.value.substring(1, 4)}</span>
+                                            <span>Path/Row:</span>
+                                            <span className="font-medium">{field.value.substring(4, 7)}/{field.value.substring(7, 10)}</span>
+                                            <span>Date:</span>
+                                            <span className="font-medium">{field.value.substring(10, 17)}</span>
+                                          </div>
+                                        </div>
+                                      )}
+                                      
+                                      {field.key.includes('CLOUD_COVER') && (
+                                        <div className="mt-1">
+                                          <div className="w-full bg-gray-200 rounded-full h-2">
+                                            <div 
+                                              className="bg-blue-600 h-2 rounded-full" 
+                                              style={{width: `${Math.min(100, parseFloat(field.value.replace(/"/g, '')))}%`}}
+                                            ></div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-gray-500">
+                      <Settings className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p>Parse satellite metadata to see fields here</p>
+                      <p className="text-xs mt-1">Supports Landsat, Sentinel, and other satellite formats</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'processing' && (
+          <div className="p-6 max-w-4xl mx-auto">
+            <h2 className="text-lg font-medium text-gray-900 mb-6">Processing Queue</h2>
+            
+            {/* Processing Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white p-4 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Pending</p>
+                    <p className="text-2xl font-semibold text-orange-600">
+                      {uploadedFiles.filter(f => f.status === 'pending').length}
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                    <File className="w-4 h-4 text-orange-600" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Processing</p>
+                    <p className="text-2xl font-semibold text-blue-600">
+                      {uploadedFiles.filter(f => f.status === 'processing').length}
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Completed</p>
+                    <p className="text-2xl font-semibold text-green-600">
+                      {uploadedFiles.filter(f => f.status === 'completed').length}
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Errors</p>
+                    <p className="text-2xl font-semibold text-red-600">
+                      {uploadedFiles.filter(f => f.status === 'error').length}
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                    <AlertTriangle className="w-4 h-4 text-red-600" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Processing Log */}
+            <div className="bg-white rounded-lg border border-gray-200">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="font-medium text-gray-900">Processing Log</h3>
+              </div>
+              <div className="p-4">
+                <div className="space-y-3">
+                  {uploadedFiles.map(file => (
+                    <div key={file.id} className="flex items-center space-x-3 text-sm">
+                      {getStatusIcon(file.status)}
+                      <span className="text-gray-500">
+                        {new Date().toLocaleTimeString()}
+                      </span>
+                      <span className="flex-1">{file.name}</span>
+                      <span className={cn(
+                        "px-2 py-1 rounded-full text-xs",
+                        file.status === 'completed' ? "bg-green-100 text-green-800" :
+                        file.status === 'processing' ? "bg-blue-100 text-blue-800" :
+                        file.status === 'error' ? "bg-red-100 text-red-800" :
+                        "bg-gray-100 text-gray-800"
+                      )}>
+                        {file.status}
+                      </span>
+                    </div>
+                  ))}
+                  {uploadedFiles.length === 0 && (
+                    <p className="text-gray-500 text-center py-8">No processing activity</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'database' && (
+          <div className="p-6 max-w-4xl mx-auto">
+            <h2 className="text-lg font-medium text-gray-900 mb-6">Database Status</h2>
+            
+            {/* Database Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white p-6 rounded-lg border border-gray-200">
+                <h3 className="font-medium text-gray-900 mb-4">Imagery Data</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Total Scenes</span>
+                    <span className="text-sm font-medium">1,247</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Storage Used</span>
+                    <span className="text-sm font-medium">2.4 TB</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Last Updated</span>
+                    <span className="text-sm font-medium">2 hours ago</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-lg border border-gray-200">
+                <h3 className="font-medium text-gray-900 mb-4">Boundaries</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Countries</span>
+                    <span className="text-sm font-medium">1</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Provinces</span>
+                    <span className="text-sm font-medium">10</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Districts</span>
+                    <span className="text-sm font-medium">63</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-lg border border-gray-200">
+                <h3 className="font-medium text-gray-900 mb-4">System Health</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Database</span>
+                    <div className="flex items-center space-x-1">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-sm font-medium text-green-600">Online</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Processing</span>
+                    <div className="flex items-center space-x-1">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-sm font-medium text-green-600">Active</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Storage</span>
+                    <div className="flex items-center space-x-1">
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                      <span className="text-sm font-medium text-yellow-600">75% Full</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div className="bg-white rounded-lg border border-gray-200">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="font-medium text-gray-900">Recent Database Activity</h3>
+              </div>
+              <div className="p-4">
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-3 text-sm">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span className="text-gray-500">15:30</span>
+                    <span>Added 23 new imagery scenes to database</span>
+                  </div>
+                  <div className="flex items-center space-x-3 text-sm">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span className="text-gray-500">14:15</span>
+                    <span>Updated administrative boundaries for Harare Province</span>
+                  </div>
+                  <div className="flex items-center space-x-3 text-sm">
+                    <Info className="w-4 h-4 text-blue-500" />
+                    <span className="text-gray-500">13:45</span>
+                    <span>Database maintenance completed successfully</span>
+                  </div>
+                  <div className="flex items-center space-x-3 text-sm">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span className="text-gray-500">12:20</span>
+                    <span>Processed metadata for 15 Landsat scenes</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default SystemManagement;

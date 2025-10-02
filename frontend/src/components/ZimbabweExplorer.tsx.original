@@ -1,0 +1,3014 @@
+import React, { useState, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import Navigation from './Navigation';
+import Sidebar from './Sidebar';
+import MapContainer from './MapContainer';
+import { GeospatialAPI, type AOI } from '../lib/api';
+
+interface MapViewState {
+  center: [number, number];
+  zoom: number;
+}
+
+interface CoordinateSystem {
+  id: string;
+  name: string;
+  code: string;
+  type: 'geographic' | 'utm' | 'projected';
+  zone?: string;
+  description: string;
+}
+
+interface AreaOfInterestMetadata {
+  filename?: string;
+  uploadDate?: string;
+  source?: string;
+}
+
+interface AreaOfInterest {
+  id: string;
+  name: string;
+  type: 'polygon' | 'rectangle' | 'circle' | 'freehand' | 'file';
+  coordinates: number[][];
+  coordinateSystem: string;
+  area: number; // in square kilometers
+  bounds: [number, number, number, number]; // [minLon, minLat, maxLon, maxLat]
+  metadata?: AreaOfInterestMetadata;
+}
+
+interface SearchCriteria {
+  location: string;
+  coordinates?: [number, number, number, number]; // bbox
+  areaOfInterest?: AreaOfInterest;
+  dateRange: {
+    start: string;
+    end: string;
+  };
+  datasets: string[];
+  cloudCover: number;
+  resultsLimit: number;
+  selectedFormats: Record<string, string[]>; // datasetId -> formats[]
+  selectedProducts: Record<string, string[]>; // datasetId -> products[]
+}
+
+interface DatasetMetadata {
+  datasetId: string;
+  formats: {
+    [format: string]: {
+      description: string;
+      fileSize: string;
+      processing: string;
+      applications: string[];
+    };
+  };
+  products: {
+    [product: string]: {
+      description: string;
+      units: string;
+      range: string;
+      accuracy: string;
+      applications: string[];
+    };
+  };
+}
+
+interface ZimbabweDataset {
+  id: string;
+  name: string;
+  description: string;
+  provider: string;
+  resolution: string;
+  bands: string[];
+  temporalCoverage: string;
+  spatialCoverage: string;
+  dataProducts: string[];
+  formats: string[];
+  category: 'Optical' | 'Radar' | 'Elevation' | 'Derived' | 'Hyperspectral' | 'Thermal';
+  enabled: boolean;
+}
+
+const ZIMBABWE_DATASETS: ZimbabweDataset[] = [
+  // Chinese Satellites
+  {
+    id: 'zimsat2',
+    name: 'ZimSat-2',
+    description: 'Zimbabwe microsatellite for agricultural and environmental monitoring',
+    provider: 'Zimbabwe Space Agency',
+    resolution: '4m',
+    bands: ['Blue', 'Green', 'Red', 'NIR'],
+    temporalCoverage: '2023-present',
+    spatialCoverage: 'Zimbabwe Priority Areas',
+    dataProducts: ['NDVI', 'NDWI', 'EVI', 'LAI', 'Agriculture Index', 'Land Cover'],
+    formats: ['GeoTIFF', 'NetCDF', 'HDF5'],
+    category: 'Optical',
+    enabled: true
+  },
+  {
+    id: 'gaofen1',
+    name: 'GaoFen-1 (高分一号)',
+    description: 'Chinese high-resolution Earth observation satellite',
+    provider: 'China National Space Administration',
+    resolution: '2-16m',
+    bands: ['Blue', 'Green', 'Red', 'NIR'],
+    temporalCoverage: '2013-present',
+    spatialCoverage: 'Global',
+    dataProducts: ['Land Cover', 'Urban Planning', 'Agriculture Monitoring', 'NDVI', 'NDWI'],
+    formats: ['GeoTIFF', 'IMG', 'HDF'],
+    category: 'Optical',
+    enabled: true
+  },
+  {
+    id: 'gaofen2',
+    name: 'GaoFen-2 (高分二号)',
+    description: 'Chinese very high-resolution optical satellite',
+    provider: 'China National Space Administration',
+    resolution: '0.8-3.2m',
+    bands: ['Blue', 'Green', 'Red', 'NIR'],
+    temporalCoverage: '2014-present',
+    spatialCoverage: 'Global',
+    dataProducts: ['Urban Mapping', 'Infrastructure', 'Detailed Land Cover', 'Change Detection'],
+    formats: ['GeoTIFF', 'IMG', 'HDF'],
+    category: 'Optical',
+    enabled: true
+  },
+  {
+    id: 'gf3_sar',
+    name: 'GaoFen-3 SAR (高分三号)',
+    description: 'Chinese C-band synthetic aperture radar satellite',
+    provider: 'China National Space Administration',
+    resolution: '1-500m',
+    bands: ['HH', 'VV', 'HV', 'VH'],
+    temporalCoverage: '2016-present',
+    spatialCoverage: 'Global',
+    dataProducts: ['Flood Mapping', 'Ship Detection', 'Oil Spill', 'Soil Moisture', 'Surface Roughness'],
+    formats: ['GeoTIFF', 'Complex', 'SLC'],
+    category: 'Radar',
+    enabled: true
+  },
+
+  // Japanese Satellites
+  {
+    id: 'alos2_palsar',
+    name: 'ALOS-2 PALSAR-2',
+    description: 'Japanese L-band synthetic aperture radar',
+    provider: 'JAXA',
+    resolution: '1-100m',
+    bands: ['HH', 'HV', 'VV', 'VH'],
+    temporalCoverage: '2014-present',
+    spatialCoverage: 'Global',
+    dataProducts: ['Forest Monitoring', 'Biomass', 'Deforestation', 'Flood Mapping', 'Subsidence'],
+    formats: ['GeoTIFF', 'CEOS', 'HDF5'],
+    category: 'Radar',
+    enabled: true
+  },
+  {
+    id: 'gosat_greenhouse',
+    name: 'GOSAT Greenhouse Gas',
+    description: 'Japanese greenhouse gas observation satellite',
+    provider: 'JAXA',
+    resolution: '10.5km',
+    bands: ['CO2', 'CH4', 'H2O'],
+    temporalCoverage: '2009-present',
+    spatialCoverage: 'Global',
+    dataProducts: ['CO2 Concentration', 'Methane Levels', 'Carbon Cycle', 'Climate Analysis'],
+    formats: ['NetCDF', 'HDF5'],
+    category: 'Derived',
+    enabled: true
+  },
+  {
+    id: 'himawari8',
+    name: 'Himawari-8 Geostationary',
+    description: 'Japanese geostationary meteorological satellite',
+    provider: 'JMA/JAXA',
+    resolution: '0.5-2km',
+    bands: ['16 Spectral Bands', 'Visible', 'NIR', 'IR'],
+    temporalCoverage: '2015-present',
+    spatialCoverage: 'Asia-Pacific Region',
+    dataProducts: ['Weather', 'Cloud Cover', 'Fire Detection', 'LST', 'Solar Radiation'],
+    formats: ['NetCDF', 'HDF5', 'GRIB'],
+    category: 'Thermal',
+    enabled: true
+  },
+
+  // Russian Satellites
+  {
+    id: 'resurs_p',
+    name: 'Resurs-P',
+    description: 'Russian high-resolution Earth observation satellite',
+    provider: 'Roscosmos',
+    resolution: '0.7-4m',
+    bands: ['Blue', 'Green', 'Red', 'NIR', 'Panchromatic'],
+    temporalCoverage: '2013-present',
+    spatialCoverage: 'Global',
+    dataProducts: ['Agriculture', 'Forestry', 'Cartography', 'Environmental Monitoring'],
+    formats: ['GeoTIFF', 'IMG'],
+    category: 'Optical',
+    enabled: true
+  },
+  {
+    id: 'kondor_e',
+    name: 'Kondor-E SAR',
+    description: 'Russian S-band synthetic aperture radar',
+    provider: 'Roscosmos',
+    resolution: '1-3m',
+    bands: ['HH', 'VV'],
+    temporalCoverage: '2013-present',
+    spatialCoverage: 'Global',
+    dataProducts: ['High-res SAR', 'Urban Monitoring', 'Infrastructure', 'Emergency Response'],
+    formats: ['GeoTIFF', 'Complex'],
+    category: 'Radar',
+    enabled: true
+  },
+
+  // US/European Satellites
+  {
+    id: 'landsat9',
+    name: 'Landsat 9 OLI-2/TIRS-2',
+    description: 'Latest generation Landsat satellite with enhanced capabilities',
+    provider: 'USGS/NASA',
+    resolution: '15-100m',
+    bands: ['Coastal', 'Blue', 'Green', 'Red', 'NIR', 'SWIR1', 'SWIR2', 'Thermal'],
+    temporalCoverage: '2021-present',
+    spatialCoverage: 'Global',
+    dataProducts: ['NDVI', 'NDWI', 'LST', 'Surface Reflectance', 'Burned Area', 'Snow Cover'],
+    formats: ['GeoTIFF', 'HDF', 'NetCDF'],
+    category: 'Optical',
+    enabled: true
+  },
+  {
+    id: 'sentinel2_msi',
+    name: 'Sentinel-2 MSI',
+    description: 'European high-resolution multispectral imagery',
+    provider: 'ESA Copernicus',
+    resolution: '10-60m',
+    bands: ['13 Spectral Bands', 'Visible', 'NIR', 'SWIR'],
+    temporalCoverage: '2015-present',
+    spatialCoverage: 'Global',
+    dataProducts: ['NDVI', 'NDWI', 'LAI', 'fAPAR', 'Land Cover', 'Agriculture Index'],
+    formats: ['SAFE', 'GeoTIFF', 'JP2'],
+    category: 'Optical',
+    enabled: true
+  },
+
+  // Hyperspectral
+  {
+    id: 'prism_hyperspectral',
+    name: 'PRISM Hyperspectral',
+    description: 'Precursore IperSpettrale Mission hyperspectral imaging',
+    provider: 'ASI (Italian Space Agency)',
+    resolution: '5-30m',
+    bands: ['200+ Spectral Bands', 'VNIR', 'SWIR'],
+    temporalCoverage: '2019-present',
+    spatialCoverage: 'Selected Regions',
+    dataProducts: ['Mineral Mapping', 'Vegetation Analysis', 'Soil Composition', 'Water Quality'],
+    formats: ['ENVI', 'HDF5', 'GeoTIFF'],
+    category: 'Hyperspectral',
+    enabled: true
+  },
+  {
+    id: 'hyperion_eo1',
+    name: 'Hyperion EO-1',
+    description: 'NASA hyperspectral imager for detailed spectral analysis',
+    provider: 'NASA',
+    resolution: '30m',
+    bands: ['220 Spectral Bands', '400-2500nm'],
+    temporalCoverage: '2000-2017',
+    spatialCoverage: 'Selected Regions',
+    dataProducts: ['Mineral Detection', 'Crop Health', 'Geological Mapping', 'Environmental Monitoring'],
+    formats: ['HDF', 'GeoTIFF', 'ENVI'],
+    category: 'Hyperspectral',
+    enabled: true
+  },
+
+  // LiDAR and Elevation
+  {
+    id: 'lidar_zimbabwe',
+    name: 'Airborne LiDAR Zimbabwe',
+    description: 'High-resolution elevation and vegetation structure data',
+    provider: 'Various Survey Companies',
+    resolution: '0.5-2m',
+    bands: ['Elevation', 'Intensity', 'RGB'],
+    temporalCoverage: '2015-present',
+    spatialCoverage: 'Major Cities and Forests',
+    dataProducts: ['DTM', 'DSM', 'CHM', 'Building Heights', 'Forest Structure'],
+    formats: ['LAS', 'LAZ', 'GeoTIFF', 'ASCII'],
+    category: 'Elevation',
+    enabled: true
+  },
+  {
+    id: 'srtm_dem',
+    name: 'SRTM Digital Elevation Model',
+    description: 'Global elevation model from radar interferometry',
+    provider: 'NASA/NGA',
+    resolution: '30m',
+    bands: ['Elevation'],
+    temporalCoverage: '2000',
+    spatialCoverage: 'Global',
+    dataProducts: ['DTM', 'Slope', 'Aspect', 'Hillshade', 'Watershed Analysis'],
+    formats: ['GeoTIFF', 'HGT', 'NetCDF'],
+    category: 'Elevation',
+    enabled: true
+  },
+  {
+    id: 'aster_gdem',
+    name: 'ASTER Global DEM',
+    description: 'Global digital elevation model from stereo imagery',
+    provider: 'NASA/METI',
+    resolution: '30m',
+    bands: ['Elevation'],
+    temporalCoverage: '2009',
+    spatialCoverage: 'Global',
+    dataProducts: ['DTM', 'Terrain Analysis', 'Hydrological Modeling'],
+    formats: ['GeoTIFF', 'HDF'],
+    category: 'Elevation',
+    enabled: true
+  },
+
+  // Environmental and Climate Data
+  {
+    id: 'modis_fire',
+    name: 'MODIS Fire Detection',
+    description: 'Global fire detection and burned area mapping',
+    provider: 'NASA',
+    resolution: '500m-1km',
+    bands: ['Thermal', 'Fire Radiative Power'],
+    temporalCoverage: '2000-present',
+    spatialCoverage: 'Global',
+    dataProducts: ['Fire Hotspots', 'Burned Area', 'Fire Weather Index', 'Smoke Detection'],
+    formats: ['HDF', 'GeoTIFF', 'NetCDF'],
+    category: 'Derived',
+    enabled: true
+  },
+  {
+    id: 'era5_climate',
+    name: 'ERA5 Climate Reanalysis',
+    description: 'Comprehensive atmospheric reanalysis data',
+    provider: 'ECMWF',
+    resolution: '0.25°',
+    bands: ['Temperature', 'Humidity', 'Wind', 'Precipitation'],
+    temporalCoverage: '1940-present',
+    spatialCoverage: 'Global',
+    dataProducts: ['Temperature', 'Humidity', 'Wind Speed/Direction', 'Precipitation', 'Pressure'],
+    formats: ['NetCDF', 'GRIB'],
+    category: 'Derived',
+    enabled: true
+  },
+  {
+    id: 'soil_moisture',
+    name: 'SMAP Soil Moisture',
+    description: 'NASA soil moisture active passive mission data',
+    provider: 'NASA',
+    resolution: '9-36km',
+    bands: ['L-band Radiometer', 'Radar'],
+    temporalCoverage: '2015-present',
+    spatialCoverage: 'Global',
+    dataProducts: ['Soil Moisture', 'Soil Temperature', 'Vegetation Opacity', 'Freeze/Thaw'],
+    formats: ['HDF5', 'NetCDF', 'GeoTIFF'],
+    category: 'Derived',
+    enabled: true
+  },
+  {
+    id: 'geological_indices',
+    name: 'Geological Indices',
+    description: 'Mineral and geological feature detection indices',
+    provider: 'Multiple Sources',
+    resolution: '15-30m',
+    bands: ['Derived from Landsat/Sentinel'],
+    temporalCoverage: '1985-present',
+    spatialCoverage: 'Zimbabwe',
+    dataProducts: ['Clay Index', 'Iron Oxide', 'Carbonate Index', 'Silica Index', 'Alteration Minerals'],
+    formats: ['GeoTIFF', 'ENVI'],
+    category: 'Derived',
+    enabled: true
+  }
+];
+
+const ZIMBABWE_PROVINCES = [
+  'All Zimbabwe',
+  'Harare',
+  'Bulawayo',
+  'Manicaland',
+  'Mashonaland Central',
+  'Mashonaland East', 
+  'Mashonaland West',
+  'Matabeleland North',
+  'Matabeleland South',
+  'Midlands',
+  'Masvingo'
+];
+
+const ZIMBABWE_DISTRICTS = {
+  'All Zimbabwe': [],
+  'Harare': ['Harare Central', 'Harare North', 'Harare South', 'Harare East', 'Harare West', 'Epworth', 'Chitungwiza'],
+  'Bulawayo': ['Bulawayo Central', 'Bulawayo North', 'Bulawayo South', 'Bulawayo East', 'Bulawayo West'],
+  'Manicaland': ['Mutare', 'Rusape', 'Chipinge', 'Makoni', 'Nyanga', 'Buhera', 'Chimanimani'],
+  'Mashonaland Central': ['Bindura', 'Shamva', 'Mount Darwin', 'Muzarabani', 'Centenary', 'Rushinga'],
+  'Mashonaland East': ['Marondera', 'Murehwa', 'Mutoko', 'Seke', 'Goromonzi', 'Wedza', 'Uzumba Maramba Pfungwe'],
+  'Mashonaland West': ['Chinhoyi', 'Kariba', 'Makonde', 'Zvimba', 'Hurungwe', 'Mhondoro-Ngezi', 'Sanyati'],
+  'Matabeleland North': ['Hwange', 'Binga', 'Lupane', 'Nkayi', 'Tsholotsho', 'Umguza'],
+  'Matabeleland South': ['Gwanda', 'Beitbridge', 'Bulilima', 'Mangwe', 'Matobo', 'Umzingwane', 'Insiza'],
+  'Midlands': ['Gweru', 'Kwekwe', 'Redcliff', 'Shurugwi', 'Chirumhanzu', 'Gokwe North', 'Gokwe South', 'Zvishavane'],
+  'Masvingo': ['Masvingo', 'Chiredzi', 'Zaka', 'Bikita', 'Gutu', 'Masvingo Rural', 'Chivi']
+}
+
+// Province/District coordinates for zoom functionality
+const ZIMBABWE_COORDINATES: Record<string, MapViewState> = {
+  'All Zimbabwe': { center: [-19.0154, 29.1549], zoom: 6 },
+  'Harare': { center: [-17.8252, 31.0335], zoom: 10 },
+  'Bulawayo': { center: [-20.1594, 28.5833], zoom: 10 },
+  'Manicaland': { center: [-18.9707, 32.6731], zoom: 8 },
+  'Mashonaland Central': { center: [-16.7500, 31.1167], zoom: 8 },
+  'Mashonaland East': { center: [-18.1833, 31.9167], zoom: 8 },
+  'Mashonaland West': { center: [-17.3667, 30.1833], zoom: 8 },
+  'Matabeleland North': { center: [-18.1500, 27.0333], zoom: 8 },
+  'Matabeleland South': { center: [-21.0167, 29.0167], zoom: 8 },
+  'Midlands': { center: [-19.4500, 29.8167], zoom: 8 },
+  'Masvingo': { center: [-20.0667, 30.8333], zoom: 8 }
+}
+
+// Comprehensive metadata for formats and products
+const DATASET_METADATA: Record<string, DatasetMetadata> = {
+  zimsat2: {
+    datasetId: 'zimsat2',
+    formats: {
+      'GeoTIFF': {
+        description: 'Georeferenced Tagged Image File Format - standard for satellite imagery',
+        fileSize: '50-200 MB per scene',
+        processing: 'Radiometrically and geometrically corrected',
+        applications: ['GIS analysis', 'Remote sensing', 'Cartography', 'Web mapping']
+      },
+      'NetCDF': {
+        description: 'Network Common Data Form - for scientific datasets',
+        fileSize: '100-500 MB per dataset',
+        processing: 'Climate Data Operators (CDO) compatible',
+        applications: ['Climate analysis', 'Atmospheric modeling', 'Research']
+      },
+      'HDF5': {
+        description: 'Hierarchical Data Format version 5 - for complex datasets',
+        fileSize: '200-1GB per dataset',
+        processing: 'Preserves metadata and data structure',
+        applications: ['Scientific computing', 'Big data analysis', 'Machine learning']
+      }
+    },
+    products: {
+      'NDVI': {
+        description: 'Normalized Difference Vegetation Index - vegetation health indicator',
+        units: 'Dimensionless (-1 to +1)',
+        range: '-1 (water/clouds) to +1 (dense vegetation)',
+        accuracy: '±0.05 NDVI units',
+        applications: ['Agriculture monitoring', 'Forest health', 'Drought assessment']
+      },
+      'NDWI': {
+        description: 'Normalized Difference Water Index - water content indicator',
+        units: 'Dimensionless (-1 to +1)',
+        range: '-1 (dry areas) to +1 (water bodies)',
+        accuracy: '±0.03 NDWI units',
+        applications: ['Water mapping', 'Irrigation monitoring', 'Flood detection']
+      },
+      'EVI': {
+        description: 'Enhanced Vegetation Index - improved vegetation monitoring',
+        units: 'Dimensionless (-1 to +1)',
+        range: '-1 to +1 (optimal vegetation ~0.2-0.8)',
+        accuracy: '±0.04 EVI units',
+        applications: ['Crop monitoring', 'Biomass estimation', 'Phenology studies']
+      },
+      'LAI': {
+        description: 'Leaf Area Index from Zimbabwe microsatellite',
+        units: 'm²/m² (dimensionless)',
+        range: '0 (bare soil) to 6+ (dense crops)',
+        accuracy: '±0.3 LAI units',
+        applications: ['Precision agriculture', 'Yield prediction', 'Irrigation planning']
+      },
+      'Agriculture Index': {
+        description: 'Composite index for agricultural productivity assessment',
+        units: 'Index value (0-100)',
+        range: '0 (no agriculture) to 100 (optimal conditions)',
+        accuracy: '±5 index units',
+        applications: ['Crop yield prediction', 'Farm management', 'Policy making']
+      },
+      'Land Cover': {
+        description: 'Land cover classification for Zimbabwe',
+        units: 'Class labels (1-15)',
+        range: 'Cropland, Forest, Grassland, Water, Urban, etc.',
+        accuracy: '85-92% overall accuracy',
+        applications: ['Land use planning', 'Environmental monitoring', 'Policy support']
+      }
+    }
+  },
+  gaofen1: {
+    datasetId: 'gaofen1',
+    formats: {
+      'GeoTIFF': {
+        description: 'Standard georeferenced format for GaoFen-1 data',
+        fileSize: '200-800 MB per scene',
+        processing: 'Orthorectified and radiometrically corrected',
+        applications: ['Land cover mapping', 'Urban planning', 'Agriculture monitoring']
+      },
+      'IMG': {
+        description: 'ERDAS IMAGINE format for professional GIS',
+        fileSize: '150-600 MB per scene',
+        processing: 'Native processing with pyramid layers',
+        applications: ['Professional GIS', 'Image processing', 'Analysis workflows']
+      },
+      'HDF': {
+        description: 'Scientific data format with metadata preservation',
+        fileSize: '300-1GB per scene',
+        processing: 'Multi-band with quality flags',
+        applications: ['Research', 'Algorithm development', 'Data mining']
+      }
+    },
+    products: {
+      'Land Cover': {
+        description: 'High-resolution land cover classification',
+        units: 'Class labels (1-25)',
+        range: 'Detailed land use/cover categories',
+        accuracy: '88-94% classification accuracy',
+        applications: ['Urban planning', 'Environmental assessment', 'Change detection']
+      },
+      'Urban Planning': {
+        description: 'Urban extent and infrastructure mapping',
+        units: 'Binary/categorical',
+        range: 'Urban/non-urban with sub-categories',
+        accuracy: '90-95% urban detection accuracy',
+        applications: ['City planning', 'Infrastructure development', 'Population studies']
+      },
+      'Agriculture Monitoring': {
+        description: 'Crop type and health assessment',
+        units: 'Crop classes and indices',
+        range: 'Major crop types and health status',
+        accuracy: '80-90% crop classification accuracy',
+        applications: ['Crop inventory', 'Food security', 'Agricultural statistics']
+      },
+      'NDVI': {
+        description: 'Vegetation index from GaoFen-1 bands',
+        units: 'Dimensionless (-1 to +1)',
+        range: '-1 to +1 (vegetation typically 0.2-0.8)',
+        accuracy: '±0.04 NDVI units',
+        applications: ['Vegetation monitoring', 'Drought assessment', 'Phenology']
+      },
+      'NDWI': {
+        description: 'Water index for surface water detection',
+        units: 'Dimensionless (-1 to +1)',
+        range: '-1 to +1 (water bodies typically >0.3)',
+        accuracy: '±0.05 NDWI units',
+        applications: ['Water body mapping', 'Flood monitoring', 'Irrigation assessment']
+      }
+    }
+  },
+  gaofen2: {
+    datasetId: 'gaofen2',
+    formats: {
+      'GeoTIFF': {
+        description: 'Very high resolution GeoTIFF format',
+        fileSize: '500MB-2GB per scene',
+        processing: 'Pansharpened and orthorectified',
+        applications: ['Detailed mapping', 'Infrastructure monitoring', 'Precision agriculture']
+      },
+      'IMG': {
+        description: 'ERDAS format for detailed analysis',
+        fileSize: '400MB-1.5GB per scene',
+        processing: 'Multi-resolution pyramid structure',
+        applications: ['Professional remote sensing', 'Detailed change detection']
+      },
+      'HDF': {
+        description: 'Scientific format with full metadata',
+        fileSize: '600MB-2.5GB per scene',
+        processing: 'Raw and processed data layers',
+        applications: ['Scientific research', 'Algorithm validation']
+      }
+    },
+    products: {
+      'Urban Mapping': {
+        description: 'Detailed urban feature extraction',
+        units: 'Feature classes',
+        range: 'Buildings, roads, green spaces, infrastructure',
+        accuracy: '92-97% feature detection accuracy',
+        applications: ['Urban planning', 'Smart city development', '3D modeling']
+      },
+      'Infrastructure': {
+        description: 'Transportation and utility infrastructure mapping',
+        units: 'Infrastructure categories',
+        range: 'Roads, railways, power lines, facilities',
+        accuracy: '85-95% infrastructure detection',
+        applications: ['Infrastructure planning', 'Maintenance scheduling', 'Asset management']
+      },
+      'Detailed Land Cover': {
+        description: 'Very detailed land cover classification',
+        units: 'Detailed class labels (1-50)',
+        range: 'Fine-scale land use categories',
+        accuracy: '90-95% detailed classification accuracy',
+        applications: ['Environmental monitoring', 'Biodiversity studies', 'Conservation planning']
+      },
+      'Change Detection': {
+        description: 'Multi-temporal change analysis',
+        units: 'Change categories',
+        range: 'No change, new development, land conversion',
+        accuracy: '85-92% change detection accuracy',
+        applications: ['Urban growth monitoring', 'Deforestation tracking', 'Development planning']
+      }
+    }
+  },
+  gf3_sar: {
+    datasetId: 'gf3_sar',
+    formats: {
+      'GeoTIFF': {
+        description: 'Processed SAR data in GeoTIFF format',
+        fileSize: '100MB-1GB per scene',
+        processing: 'Geocoded and calibrated backscatter',
+        applications: ['Flood mapping', 'Land cover classification', 'Change detection']
+      },
+      'Complex': {
+        description: 'Complex SAR data with phase information',
+        fileSize: '200MB-2GB per scene',
+        processing: 'Single Look Complex (SLC) format',
+        applications: ['Interferometry', 'Polarimetry', 'Advanced SAR analysis']
+      },
+      'SLC': {
+        description: 'Single Look Complex format for advanced processing',
+        fileSize: '300MB-3GB per scene',
+        processing: 'Full phase and amplitude information',
+        applications: ['InSAR', 'Differential interferometry', 'Subsidence monitoring']
+      }
+    },
+    products: {
+      'Flood Mapping': {
+        description: 'Water body and flood extent mapping',
+        units: 'Binary (water/no water)',
+        range: '0 (no water) to 1 (water present)',
+        accuracy: '90-95% water detection accuracy',
+        applications: ['Flood monitoring', 'Disaster response', 'Water resource management']
+      },
+      'Ship Detection': {
+        description: 'Maritime vessel detection and tracking',
+        units: 'Object detection (ship/no ship)',
+        range: 'Ship detections with confidence scores',
+        accuracy: '85-92% ship detection accuracy',
+        applications: ['Maritime surveillance', 'Fishing monitoring', 'Traffic analysis']
+      },
+      'Oil Spill': {
+        description: 'Oil spill detection and extent mapping',
+        units: 'Anomaly detection',
+        range: 'Oil spill probability and extent',
+        accuracy: '80-90% oil spill detection accuracy',
+        applications: ['Environmental monitoring', 'Pollution response', 'Maritime safety']
+      },
+      'Soil Moisture': {
+        description: 'Surface soil moisture estimation',
+        units: 'Volumetric water content (%)',
+        range: '0-50% soil moisture content',
+        accuracy: '±5% volumetric moisture content',
+        applications: ['Agriculture', 'Drought monitoring', 'Hydrological modeling']
+      },
+      'Surface Roughness': {
+        description: 'Land surface roughness characterization',
+        units: 'Roughness classes',
+        range: 'Smooth to very rough surface categories',
+        accuracy: '±15% roughness estimation',
+        applications: ['Soil preparation', 'Erosion assessment', 'Land management']
+      }
+    }
+  },
+  landsat9: {
+    datasetId: 'landsat9',
+    formats: {
+      'GeoTIFF': {
+        description: 'Standard format for Landsat data distribution',
+        fileSize: '1-2 GB per scene (L1)',
+        processing: 'Level 1 or Level 2 surface reflectance',
+        applications: ['Time series analysis', 'Change detection', 'Environmental monitoring']
+      },
+      'HDF': {
+        description: 'Hierarchical Data Format for scientific datasets',
+        fileSize: '800MB-1.5GB per scene',
+        processing: 'Maintains all metadata and quality bands',
+        applications: ['Research applications', 'Algorithm development']
+      },
+      'NetCDF': {
+        description: 'Climate and Forecast compliant format',
+        fileSize: '1.2-2.5GB per scene',
+        processing: 'CF-compliant with THREDDS support',
+        applications: ['Climate studies', 'Web services', 'Data visualization']
+      }
+    },
+    products: {
+      'NDVI': {
+        description: 'Normalized Difference Vegetation Index from Landsat 9',
+        units: 'Dimensionless (-1 to +1)',
+        range: '-1 (water/snow) to +1 (dense vegetation)',
+        accuracy: '±0.05 NDVI units',
+        applications: ['Vegetation monitoring', 'Agricultural assessment', 'Environmental studies']
+      },
+      'NDWI': {
+        description: 'Normalized Difference Water Index',
+        units: 'Dimensionless (-1 to +1)',
+        range: '-1 (dry areas) to +1 (water bodies)',
+        accuracy: '±0.03 NDWI units',
+        applications: ['Water mapping', 'Drought monitoring', 'Wetland studies']
+      },
+      'LST': {
+        description: 'Land Surface Temperature from thermal bands',
+        units: 'Kelvin (K)',
+        range: '220K to 350K (-53°C to 77°C)',
+        accuracy: '±2K under clear sky conditions',
+        applications: ['Urban heat islands', 'Climate monitoring', 'Agriculture']
+      },
+      'Surface Reflectance': {
+        description: 'Atmospherically corrected surface reflectance',
+        units: 'Reflectance (0-1)',
+        range: '0 (no reflection) to 1 (perfect reflection)',
+        accuracy: '±0.05 reflectance units',
+        applications: ['Vegetation analysis', 'Land cover mapping', 'Change detection']
+      },
+      'Burned Area': {
+        description: 'Fire-affected areas using spectral indices',
+        units: 'Binary (burned/not burned)',
+        range: '0 (not burned) to 1 (burned)',
+        accuracy: '85-95% classification accuracy',
+        applications: ['Fire management', 'Ecosystem monitoring', 'Carbon cycle']
+      },
+      'Snow Cover': {
+        description: 'Snow and ice coverage mapping',
+        units: 'Fractional snow cover (0-1)',
+        range: '0 (no snow) to 1 (complete snow cover)',
+        accuracy: '±10% snow fraction',
+        applications: ['Hydrology', 'Climate studies', 'Water resource planning']
+      }
+    }
+  },
+  sentinel2_msi: {
+    datasetId: 'sentinel2_msi',
+    formats: {
+      'SAFE': {
+        description: 'Standard Archive Format for Europe - native Sentinel format',
+        fileSize: '500MB-1.5GB per granule',
+        processing: 'L1C (Top-of-atmosphere) or L2A (Bottom-of-atmosphere)',
+        applications: ['European standards', 'ESA toolchains', 'Scientific research']
+      },
+      'GeoTIFF': {
+        description: 'Individual bands as separate GeoTIFF files',
+        fileSize: '50-300MB per band',
+        processing: 'Resampled to common grid',
+        applications: ['GIS integration', 'Commercial software', 'Web mapping']
+      },
+      'JP2': {
+        description: 'JPEG 2000 format with georeferencing',
+        fileSize: '30-200MB per band',
+        processing: 'Lossless compression with metadata',
+        applications: ['Web services', 'Mobile applications', 'Bandwidth-limited areas']
+      }
+    },
+    products: {
+      'NDVI': {
+        description: 'High-resolution vegetation index from Sentinel-2',
+        units: 'Dimensionless (-1 to +1)',
+        range: '-1 to +1 (healthy vegetation 0.2-0.8)',
+        accuracy: '±0.04 NDVI units',
+        applications: ['Precision agriculture', 'Forest monitoring', 'Vegetation phenology']
+      },
+      'NDWI': {
+        description: 'Water content and surface water mapping',
+        units: 'Dimensionless (-1 to +1)',
+        range: '-1 to +1 (water typically >0.3)',
+        accuracy: '±0.03 NDWI units',
+        applications: ['Water resource monitoring', 'Irrigation management', 'Flood mapping']
+      },
+      'LAI': {
+        description: 'Leaf Area Index - vegetation density measure',
+        units: 'm²/m² (dimensionless)',
+        range: '0 (bare soil) to 8+ (dense forest)',
+        accuracy: '±0.5 LAI units',
+        applications: ['Forestry', 'Agriculture modeling', 'Carbon sequestration']
+      },
+      'fAPAR': {
+        description: 'Fraction of Absorbed Photosynthetically Active Radiation',
+        units: 'Fraction (0-1)',
+        range: '0 (no absorption) to 1 (full absorption)',
+        accuracy: '±0.1 absolute units',
+        applications: ['Primary productivity', 'Crop monitoring', 'Ecosystem health']
+      },
+      'Land Cover': {
+        description: 'Classification of land surface types',
+        units: 'Class labels (1-20)',
+        range: 'Water, Urban, Forest, Agriculture, etc.',
+        accuracy: '80-95% depending on class',
+        applications: ['Urban planning', 'Environmental assessment', 'Policy making']
+      },
+      'Agriculture Index': {
+        description: 'Multi-spectral agricultural productivity index',
+        units: 'Index value (0-100)',
+        range: '0 (poor conditions) to 100 (optimal conditions)',
+        accuracy: '±8 index units',
+        applications: ['Crop yield forecasting', 'Agricultural insurance', 'Food security']
+      }
+    }
+  },
+  alos2_palsar: {
+    datasetId: 'alos2_palsar',
+    formats: {
+      'GeoTIFF': {
+        description: 'Processed L-band SAR data in GeoTIFF format',
+        fileSize: '200MB-1.5GB per scene',
+        processing: 'Orthorectified and radiometrically calibrated',
+        applications: ['Forest monitoring', 'Land cover mapping', 'Biomass estimation']
+      },
+      'CEOS': {
+        description: 'Committee on Earth Observation Satellites format',
+        fileSize: '300MB-2GB per scene',
+        processing: 'Standard SAR processing format',
+        applications: ['SAR data exchange', 'International collaboration', 'Archival']
+      },
+      'HDF5': {
+        description: 'Scientific format with complex SAR data',
+        fileSize: '500MB-3GB per scene',
+        processing: 'Multi-polarization with metadata',
+        applications: ['Advanced SAR analysis', 'Polarimetric studies', 'Research']
+      }
+    },
+    products: {
+      'Forest Monitoring': {
+        description: 'Forest cover and health assessment',
+        units: 'Forest/non-forest classification',
+        range: 'Forest types and health categories',
+        accuracy: '90-95% forest detection accuracy',
+        applications: ['Deforestation monitoring', 'Forest management', 'REDD+ programs']
+      },
+      'Biomass': {
+        description: 'Above-ground biomass estimation',
+        units: 'Tons per hectare (t/ha)',
+        range: '0-500 t/ha depending on forest type',
+        accuracy: '±20-30% biomass estimation',
+        applications: ['Carbon accounting', 'Forest inventory', 'Climate studies']
+      },
+      'Deforestation': {
+        description: 'Forest loss detection and monitoring',
+        units: 'Change detection (loss/gain)',
+        range: 'Forest change categories and dates',
+        accuracy: '85-92% change detection accuracy',
+        applications: ['Environmental monitoring', 'Law enforcement', 'Conservation']
+      },
+      'Flood Mapping': {
+        description: 'Flood extent mapping with L-band penetration',
+        units: 'Flood/no-flood classification',
+        range: 'Flood extent and duration',
+        accuracy: '88-94% flood detection accuracy',
+        applications: ['Disaster response', 'Risk assessment', 'Insurance']
+      },
+      'Subsidence': {
+        description: 'Ground subsidence monitoring via InSAR',
+        units: 'Millimeters per year (mm/yr)',
+        range: '±100 mm/yr displacement',
+        accuracy: '±5-10 mm annual displacement',
+        applications: ['Infrastructure monitoring', 'Mining impacts', 'Urban planning']
+      }
+    }
+  },
+  // Adding metadata for additional datasets...
+  general: {
+    datasetId: 'general',
+    formats: {
+      'GeoTIFF': {
+        description: 'Georeferenced Tagged Image File Format - industry standard',
+        fileSize: 'Varies by dataset and processing level',
+        processing: 'Various processing levels available',
+        applications: ['GIS software', 'Web mapping', 'Analysis tools', 'Visualization']
+      },
+      'NetCDF': {
+        description: 'Network Common Data Form - self-describing scientific format',
+        fileSize: 'Optimized for large multidimensional datasets',
+        processing: 'CF-compliant with rich metadata',
+        applications: ['Climate modeling', 'Oceanography', 'Atmospheric science']
+      },
+      'HDF5': {
+        description: 'Hierarchical Data Format - efficient for big data',
+        fileSize: 'Compressed and optimized storage',
+        processing: 'Supports parallel I/O and chunking',
+        applications: ['Big data analytics', 'Machine learning', 'Scientific computing']
+      },
+      'ENVI': {
+        description: 'ENVI format for hyperspectral and specialized data',
+        fileSize: 'Optimized for spectral analysis',
+        processing: 'Band interleaved and spectral library support',
+        applications: ['Hyperspectral analysis', 'Mineral mapping', 'Vegetation studies']
+      },
+      'SAFE': {
+        description: 'Standard Archive Format for Europe - Sentinel standard',
+        fileSize: 'Package format with multiple components',
+        processing: 'Includes metadata, previews, and data files',
+        applications: ['ESA software', 'Copernicus services', 'European projects']
+      },
+      'LAS': {
+        description: 'LASer format for LiDAR point cloud data',
+        fileSize: 'Variable based on point density',
+        processing: 'Industry standard for LiDAR exchange',
+        applications: ['3D modeling', 'Topographic mapping', 'Forest structure']
+      },
+      'LAZ': {
+        description: 'Compressed LAS format for efficient storage',
+        fileSize: '50-80% smaller than LAS',
+        processing: 'Lossless compression of LiDAR data',
+        applications: ['Data distribution', 'Archive storage', 'Web services']
+      }
+    },
+    products: {}
+  }
+};
+
+// Supported Coordinate Systems for Zimbabwe
+const COORDINATE_SYSTEMS: CoordinateSystem[] = [
+  {
+    id: 'wgs84',
+    name: 'WGS 84 (Geographic)',
+    code: 'EPSG:4326',
+    type: 'geographic',
+    description: 'World Geodetic System 1984 - Global standard for GPS and satellite data'
+  },
+  {
+    id: 'utm35s',
+    name: 'UTM Zone 35S',
+    code: 'EPSG:32735',
+    type: 'utm',
+    zone: '35S',
+    description: 'Universal Transverse Mercator Zone 35 South - Western Zimbabwe'
+  },
+  {
+    id: 'utm36s',
+    name: 'UTM Zone 36S',
+    code: 'EPSG:32736',
+    type: 'utm',
+    zone: '36S',
+    description: 'Universal Transverse Mercator Zone 36 South - Eastern Zimbabwe'
+  },
+  {
+    id: 'arc1950_utm35s',
+    name: 'Arc 1950 UTM 35S',
+    code: 'EPSG:20935',
+    type: 'utm',
+    zone: '35S',
+    description: 'Arc 1950 UTM Zone 35 South - Historical Zimbabwe datum'
+  },
+  {
+    id: 'arc1950_utm36s',
+    name: 'Arc 1950 UTM 36S',
+    code: 'EPSG:20936',
+    type: 'utm',
+    zone: '36S',
+    description: 'Arc 1950 UTM Zone 36 South - Historical Zimbabwe datum'
+  },
+  {
+    id: 'zimbabwe_tm',
+    name: 'Zimbabwe TM',
+    code: 'EPSG:4297',
+    type: 'projected',
+    description: 'Zimbabwe Transverse Mercator - National grid system'
+  }
+];
+
+// Drawing tool options
+const DRAWING_TOOLS = [
+  {
+    id: 'rectangle',
+    name: 'Rectangle',
+    icon: Square,
+    description: 'Draw a rectangular area of interest'
+  },
+  {
+    id: 'polygon',
+    name: 'Polygon',
+    icon: MapPin, // Using MapPin instead of Polygon
+    description: 'Draw a custom polygon shape'
+  },
+  {
+    id: 'circle',
+    name: 'Circle',
+    icon: Circle,
+    description: 'Draw a circular area with radius'
+  },
+  {
+    id: 'freehand',
+    name: 'Freehand',
+    icon: MousePointer,
+    description: 'Draw a freeform shape'
+  }
+];
+
+// File upload types
+const SUPPORTED_FILE_TYPES = [
+  {
+    id: 'kml',
+    name: 'KML/KMZ',
+    extensions: ['.kml', '.kmz'],
+    description: 'Google Earth format - Keyhole Markup Language',
+    icon: '🌍'
+  },
+  {
+    id: 'shapefile',
+    name: 'Shapefile',
+    extensions: ['.shp', '.zip'],
+    description: 'ESRI Shapefile format (upload as ZIP containing .shp, .shx, .dbf)',
+    icon: '📁'
+  },
+  {
+    id: 'geojson',
+    name: 'GeoJSON',
+    extensions: ['.geojson', '.json'],
+    description: 'Geographic JSON format',
+    icon: '{ }'
+  },
+  {
+    id: 'gpx',
+    name: 'GPX',
+    extensions: ['.gpx'],
+    description: 'GPS Exchange Format',
+    icon: '🛰️'
+  },
+  {
+    id: 'wkt',
+    name: 'Well-Known Text',
+    extensions: ['.wkt', '.txt'],
+    description: 'Well-Known Text geometry format',
+    icon: '📝'
+  }
+];
+
+const ZimbabweExplorer: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'search' | 'datasets' | 'additional' | 'results'>('search');
+  const [selectedProvince, setSelectedProvince] = useState<string>('All Zimbabwe');
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('');
+  const [mapViewState, setMapViewState] = useState<MapViewState>({ center: [-19.0154, 29.1549], zoom: 6 });
+  const [selectedCoordinates, setSelectedCoordinates] = useState<string>('');
+  
+  const [searchCriteria, setSearchCriteria] = useState<SearchCriteria>({
+    location: 'All Zimbabwe',
+    dateRange: {
+      start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      end: new Date().toISOString().split('T')[0]
+    },
+    datasets: ['zimsat2', 'sentinel2_msi', 'landsat9'],
+    cloudCover: 30,
+    resultsLimit: 100,
+    selectedFormats: {},
+    selectedProducts: {}
+  });
+
+  const [selectedDatasets, setSelectedDatasets] = useState<string[]>(['zimsat2', 'sentinel2_msi', 'landsat9']);
+  const [expandedDataset, setExpandedDataset] = useState<string | null>(null);
+  const [selectedMetadataItem, setSelectedMetadataItem] = useState<{type: 'format' | 'product', item: string, datasetId: string} | null>(null);
+
+  // Enhanced Area Selection State
+  const [areaSelectionMode, setAreaSelectionMode] = useState<'none' | 'coordinates' | 'drawing' | 'upload'>('none');
+  const [selectedCoordinateSystem, setSelectedCoordinateSystem] = useState<string>('wgs84');
+  const [coordinateInputs, setCoordinateInputs] = useState({
+    latitude: '',
+    longitude: '',
+    latitudeMax: '',
+    longitudeMax: '',
+    easting: '',
+    northing: '',
+    eastingMax: '',
+    northingMax: ''
+  });
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isProcessingFiles, setIsProcessingFiles] = useState<boolean>(false);
+  const [areasOfInterest, setAreasOfInterest] = useState<AreaOfInterest[]>([]);
+  const [activeDrawingTool, setActiveDrawingTool] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Enhanced Map Controls State
+  const [mapRotation, setMapRotation] = useState<number>(0);
+  const [is3DMode, setIs3DMode] = useState<boolean>(false);
+  const [showMinimap, setShowMinimap] = useState<boolean>(true);
+  const [showCoordinates, setShowCoordinates] = useState<boolean>(true);
+  const [showScale, setShowScale] = useState<boolean>(true);
+  const [showZimbabweBoundary, setShowZimbabweBoundary] = useState<boolean>(true);
+  const [showSelectionBoundaries, setShowSelectionBoundaries] = useState<boolean>(true);
+  
+  // AOI State Management
+  const [selectedAOI, setSelectedAOI] = useState<AOI | null>(null);
+
+  // Process uploaded files and create AOIs
+  const processUploadedFiles = async () => {
+    if (uploadedFiles.length === 0) return;
+
+    setUploadError(null); // Clear any previous errors
+    setIsProcessingFiles(true); // Start loading
+
+    try {
+      const allCreatedAOIs = [];
+
+      // Process each file individually
+      for (const file of uploadedFiles) {
+        const formData = new FormData();
+        formData.append('file', file); // Backend expects 'file', not 'files'
+
+        const result = await GeospatialAPI.uploadGeometry(formData);
+        
+        if (result.success && (result.created_aois || result.aoi)) {
+          // Get the created AOIs from this file
+          const createdAOIs = result.created_aois || (result.aoi ? [result.aoi] : []);
+          allCreatedAOIs.push(...createdAOIs);
+        }
+      }
+
+      if (allCreatedAOIs.length > 0) {
+        // Set the first AOI as selected to trigger map display and zoom
+        setSelectedAOI(allCreatedAOIs[0]);
+        
+        // Add all created AOIs to the areas of interest list
+        const newAreaOfInterest = allCreatedAOIs.map(aoi => ({
+          id: `aoi-${aoi.id}`,
+          name: aoi.name || `Uploaded AOI ${aoi.id}`,
+          type: 'file' as const,
+          coordinates: [],
+          coordinateSystem: selectedCoordinateSystem,
+          area: aoi.area_km2 || 0,
+          bounds: aoi.bounds || [0, 0, 0, 0],
+          metadata: {
+            filename: uploadedFiles[0]?.name,
+            uploadDate: new Date().toISOString(),
+            source: 'upload'
+          }
+        }));
+        
+        setAreasOfInterest(prev => [...prev, ...newAreaOfInterest]);
+        
+        // Clear uploaded files after successful processing
+        setUploadedFiles([]);
+        
+        console.log('AOI upload successful:', allCreatedAOIs);
+      }
+    } catch (error: any) {
+      console.error('Error processing uploaded files:', error);
+      
+      // Extract error message for user display
+      let errorMessage = 'Failed to process uploaded files. Please try again.';
+      
+      if (error.response?.data?.details) {
+        // Prefer the detailed error message which contains specific instructions
+        errorMessage = error.response.data.details;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Set error for display to user
+      setUploadError(errorMessage);
+      
+      // Log more detailed error information
+      if (error.response) {
+        console.error('Error response:', error.response.data);
+        console.error('Error status:', error.response.status);
+      }
+    } finally {
+      setIsProcessingFiles(false); // Stop loading
+    }
+  };
+  // Mock mouse position for coordinates display (in a real implementation, this would be updated by map mouse events)
+  const [currentMousePosition] = useState<{lat: number, lng: number} | null>({lat: -19.0154, lng: 29.1549});
+
+  const handleProvinceChange = (province: string) => {
+    setSelectedProvince(province);
+    setSelectedDistrict('');
+    setSearchCriteria(prev => ({ ...prev, location: province }));
+    
+    // Zoom to province
+    const coordinates = ZIMBABWE_COORDINATES[province];
+    if (coordinates) {
+      setMapViewState(coordinates);
+    }
+  };
+
+  const handleDistrictChange = (district: string) => {
+    setSelectedDistrict(district);
+    const location = district ? `${district}, ${selectedProvince}` : selectedProvince;
+    setSearchCriteria(prev => ({ ...prev, location }));
+  };
+
+  // Search for imagery
+  const { data: imagery, isLoading, refetch } = useQuery({
+    queryKey: ['zimbabwe-imagery', searchCriteria],
+    queryFn: async () => {
+      if (selectedDatasets.length === 0) return { results: [], count: 0 };
+      
+      return GeospatialAPI.searchImageryByLocation({
+        location: searchCriteria.location,
+        start_date: searchCriteria.dateRange.start,
+        end_date: searchCriteria.dateRange.end,
+        providers: selectedDatasets,
+        max_cloud_cover: searchCriteria.cloudCover,
+        max_results: searchCriteria.resultsLimit
+      });
+    },
+    enabled: false
+  });
+
+  const handleSearch = () => {
+    refetch();
+  };
+
+  const handleClearSearch = () => {
+    setSelectedProvince('All Zimbabwe');
+    setSelectedDistrict('');
+    setMapViewState({ center: [-19.0154, 29.1549], zoom: 6 });
+    setSearchCriteria({
+      location: 'All Zimbabwe',
+      dateRange: {
+        start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        end: new Date().toISOString().split('T')[0]
+      },
+      datasets: ['zimsat2', 'sentinel2_msi', 'landsat9'],
+      cloudCover: 30,
+      resultsLimit: 100,
+      selectedFormats: {},
+      selectedProducts: {}
+    });
+    setSelectedDatasets(['zimsat2', 'sentinel2_msi', 'landsat9']);
+  };
+
+  const toggleDataset = (datasetId: string) => {
+    setSelectedDatasets(prev => 
+      prev.includes(datasetId) 
+        ? prev.filter(id => id !== datasetId)
+        : [...prev, datasetId]
+    );
+  };
+
+  const toggleFormat = (datasetId: string, format: string) => {
+    setSearchCriteria(prev => ({
+      ...prev,
+      selectedFormats: {
+        ...prev.selectedFormats,
+        [datasetId]: prev.selectedFormats[datasetId]?.includes(format)
+          ? prev.selectedFormats[datasetId].filter(f => f !== format)
+          : [...(prev.selectedFormats[datasetId] || []), format]
+      }
+    }));
+  };
+
+  const toggleProduct = (datasetId: string, product: string) => {
+    setSearchCriteria(prev => ({
+      ...prev,
+      selectedProducts: {
+        ...prev.selectedProducts,
+        [datasetId]: prev.selectedProducts[datasetId]?.includes(product)
+          ? prev.selectedProducts[datasetId].filter(p => p !== product)
+          : [...(prev.selectedProducts[datasetId] || []), product]
+      }
+    }));
+  };
+
+  const getMetadataInfo = (type: 'format' | 'product', item: string, datasetId: string) => {
+    const metadata = DATASET_METADATA[datasetId];
+    if (!metadata) return null;
+    
+    if (type === 'format') {
+      return metadata.formats[item];
+    } else {
+      return metadata.products[item];
+    }
+  };
+
+  return (
+    <div className="h-screen flex flex-col bg-gray-100" style={{fontFamily: 'Roboto, sans-serif'}}>
+      {/* Header - EarthExplorer Style */}
+      <header className="bg-gray-800 text-white">
+        <div className="px-4 py-2 border-b border-gray-700">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-bold text-white">🇿🇼 ZimbabweExplorer</h1>
+            <div className="flex items-center space-x-3 text-xs">
+              <a href="#" className="text-gray-300 hover:text-white">Help</a>
+              <a href="#" className="text-gray-300 hover:text-white">Feedback</a>
+              <a href="#" className="text-gray-300 hover:text-white">Login</a>
+            </div>
+          </div>
+        </div>
+        {/* Navigation Tabs */}
+        <div className="px-4 py-1">
+          <nav className="flex space-x-4">
+            <button 
+              onClick={() => setActiveTab('search')}
+              className={`px-3 py-1.5 rounded-t text-xs font-medium ${
+                activeTab === 'search' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'
+              }`}
+            >
+              Search Criteria
+            </button>
+            <button 
+              onClick={() => setActiveTab('datasets')}
+              className={`px-3 py-1.5 rounded-t text-xs font-medium ${
+                activeTab === 'datasets' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'
+              }`}
+            >
+              Data Sets
+            </button>
+            <button 
+              onClick={() => setActiveTab('additional')}
+              className={`px-3 py-1.5 rounded-t text-xs font-medium ${
+                activeTab === 'additional' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'
+              }`}
+            >
+              Additional Criteria
+            </button>
+            <button 
+              onClick={() => setActiveTab('results')}
+              className={`px-4 py-2 rounded-t text-sm font-medium ${
+                activeTab === 'results' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'
+              }`}
+            >
+              Results
+            </button>
+            <div className="ml-auto flex items-center space-x-2">
+              <span className="text-gray-300 text-sm">
+                Search Criteria Summary (Show)
+              </span>
+              <button 
+                onClick={handleClearSearch}
+                className="bg-red-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-red-700"
+              >
+                Clear Search Criteria
+              </button>
+            </div>
+          </nav>
+        </div>
+      </header>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar - Scrollable */}
+        <div className="w-72 bg-white border-r border-gray-300 flex flex-col">
+          <div className="flex-1 overflow-y-auto">
+            {/* Search Criteria Tab */}
+            {activeTab === 'search' && (
+              
+              <div>
+                <div className="bg-gray-200 border-b border-gray-300 px-3 py-2">
+                  <h2 className="text-xs font-semibold text-gray-700">
+                    1. Enter Search Criteria
+                  </h2>
+                  <p className="text-xs text-gray-600 mt-1 leading-tight">
+                    To narrow your search area, type in an address or place name, 
+                    enter coordinates or click the map to define your search area.
+                  </p>
+                </div>
+
+                {/* Location Search */}
+                <div className="p-3 space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Select a Geocoding Method
+                    </label>
+                    <select className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500">
+                      <option>Feature (GNIS)</option>
+                      <option>Coordinates</option>
+                      <option>Path/Row</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Province/Region Name
+                    </label>
+                    <select
+                      value={selectedProvince}
+                      onChange={(e) => handleProvinceChange(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                    >
+                      {ZIMBABWE_PROVINCES.map(province => (
+                        <option key={province} value={province}>{province}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedProvince !== 'All Zimbabwe' && ZIMBABWE_DISTRICTS[selectedProvince as keyof typeof ZIMBABWE_DISTRICTS]?.length > 0 && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-2">
+                        District (Optional)
+                      </label>
+                      <select
+                        value={selectedDistrict}
+                        onChange={(e) => handleDistrictChange(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">All Districts in {selectedProvince}</option>
+                        {ZIMBABWE_DISTRICTS[selectedProvince as keyof typeof ZIMBABWE_DISTRICTS].map(district => (
+                          <option key={district} value={district}>{district}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Feature Name (use % as wildcard)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Search Zimbabwe features..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Enhanced Area Selection */}
+                  <div className="border-t pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-700">🗺️ Advanced Area Selection</h3>
+                      <div className="flex space-x-1">
+                        <button 
+                          onClick={() => setAreaSelectionMode('coordinates')}
+                          className={`px-2 py-1 text-xs rounded transition-colors ${
+                            areaSelectionMode === 'coordinates' ? 'bg-blue-200 text-blue-800' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                          }`}
+                          title="Enter coordinates manually"
+                        >
+                          <Target className="h-3 w-3 inline mr-1" />
+                          Coordinates
+                        </button>
+                        <button 
+                          onClick={() => setAreaSelectionMode('drawing')}
+                          className={`px-2 py-1 text-xs rounded transition-colors ${
+                            areaSelectionMode === 'drawing' ? 'bg-green-200 text-green-800' : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          }`}
+                          title="Draw on map"
+                        >
+                          <MousePointer className="h-3 w-3 inline mr-1" />
+                          Draw
+                        </button>
+                        <button 
+                          onClick={() => setAreaSelectionMode('upload')}
+                          className={`px-2 py-1 text-xs rounded transition-colors ${
+                            areaSelectionMode === 'upload' ? 'bg-purple-200 text-purple-800' : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                          }`}
+                          title="Upload file"
+                        >
+                          <Upload className="h-3 w-3 inline mr-1" />
+                          Upload
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Coordinate System Selection */}
+                    <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded">
+                      <label className="block text-xs font-medium text-gray-700 mb-2">
+                        📐 Coordinate Reference System
+                      </label>
+                      <select
+                        value={selectedCoordinateSystem}
+                        onChange={(e) => {
+                          setSelectedCoordinateSystem(e.target.value);
+                          setCoordinateInputs({
+                            latitude: '', longitude: '', latitudeMax: '', longitudeMax: '',
+                            easting: '', northing: '', eastingMax: '', northingMax: ''
+                          });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500"
+                      >
+                        {COORDINATE_SYSTEMS.map(cs => (
+                          <option key={cs.id} value={cs.id}>
+                            {cs.name} ({cs.code})
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {COORDINATE_SYSTEMS.find(cs => cs.id === selectedCoordinateSystem)?.description}
+                      </p>
+                    </div>
+
+                    {/* Coordinate Input Mode */}
+                    {areaSelectionMode === 'coordinates' && (
+                      <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded">
+                        <h4 className="text-sm font-medium text-blue-800 mb-3 flex items-center">
+                          <Target className="h-4 w-4 mr-2" />
+                          Manual Coordinate Entry
+                        </h4>
+                        
+                        {COORDINATE_SYSTEMS.find(cs => cs.id === selectedCoordinateSystem)?.type === 'geographic' ? (
+                          // Geographic coordinates (Lat/Lon)
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                  🧭 Southwest Corner
+                                </label>
+                                <div className="space-y-2">
+                                  <input
+                                    type="number"
+                                    step="0.000001"
+                                    placeholder="Latitude (South)"
+                                    value={coordinateInputs.latitude}
+                                    onChange={(e) => setCoordinateInputs(prev => ({ ...prev, latitude: e.target.value }))}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                                  />
+                                  <input
+                                    type="number"
+                                    step="0.000001"
+                                    placeholder="Longitude (West)"
+                                    value={coordinateInputs.longitude}
+                                    onChange={(e) => setCoordinateInputs(prev => ({ ...prev, longitude: e.target.value }))}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                  🧭 Northeast Corner
+                                </label>
+                                <div className="space-y-2">
+                                  <input
+                                    type="number"
+                                    step="0.000001"
+                                    placeholder="Latitude (North)"
+                                    value={coordinateInputs.latitudeMax}
+                                    onChange={(e) => setCoordinateInputs(prev => ({ ...prev, latitudeMax: e.target.value }))}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                                  />
+                                  <input
+                                    type="number"
+                                    step="0.000001"
+                                    placeholder="Longitude (East)"
+                                    value={coordinateInputs.longitudeMax}
+                                    onChange={(e) => setCoordinateInputs(prev => ({ ...prev, longitudeMax: e.target.value }))}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-xs text-gray-600 bg-white p-2 rounded border">
+                              <p><strong>Example for Zimbabwe:</strong></p>
+                              <p>Southwest: -22.4174, 25.2373 | Northeast: -15.6097, 33.0560</p>
+                            </div>
+                          </div>
+                        ) : (
+                          // UTM/Projected coordinates (Easting/Northing)
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                  📍 Southwest Corner
+                                </label>
+                                <div className="space-y-2">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="Easting (m)"
+                                    value={coordinateInputs.easting}
+                                    onChange={(e) => setCoordinateInputs(prev => ({ ...prev, easting: e.target.value }))}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                                  />
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="Northing (m)"
+                                    value={coordinateInputs.northing}
+                                    onChange={(e) => setCoordinateInputs(prev => ({ ...prev, northing: e.target.value }))}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                  📍 Northeast Corner
+                                </label>
+                                <div className="space-y-2">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="Easting (m)"
+                                    value={coordinateInputs.eastingMax}
+                                    onChange={(e) => setCoordinateInputs(prev => ({ ...prev, eastingMax: e.target.value }))}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                                  />
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="Northing (m)"
+                                    value={coordinateInputs.northingMax}
+                                    onChange={(e) => setCoordinateInputs(prev => ({ ...prev, northingMax: e.target.value }))}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-xs text-gray-600 bg-white p-2 rounded border">
+                              <p><strong>UTM Zone {COORDINATE_SYSTEMS.find(cs => cs.id === selectedCoordinateSystem)?.zone}:</strong></p>
+                              <p>Zimbabwe spans UTM zones 35S and 36S</p>
+                            </div>
+                          </div>
+                        )}
+                        
+                        <div className="flex space-x-2 mt-3">
+                          <button 
+                            onClick={() => {
+                              // Apply coordinates logic here
+                              console.log('Applying coordinates:', coordinateInputs);
+                            }}
+                            className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                          >
+                            Apply Coordinates
+                          </button>
+                          <button 
+                            onClick={() => setCoordinateInputs({
+                              latitude: '', longitude: '', latitudeMax: '', longitudeMax: '',
+                              easting: '', northing: '', eastingMax: '', northingMax: ''
+                            })}
+                            className="px-3 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Drawing Tools Mode */}
+                    {areaSelectionMode === 'drawing' && (
+                      <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded">
+                        <h4 className="text-sm font-medium text-green-800 mb-3 flex items-center">
+                          <MousePointer className="h-4 w-4 mr-2" />
+                          Interactive Drawing Tools
+                        </h4>
+                        
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                          {DRAWING_TOOLS.map(tool => {
+                            const IconComponent = tool.icon;
+                            return (
+                              <button
+                                key={tool.id}
+                                onClick={() => setActiveDrawingTool(activeDrawingTool === tool.id ? null : tool.id)}
+                                className={`p-3 text-left border rounded transition-colors ${
+                                  activeDrawingTool === tool.id 
+                                    ? 'border-green-500 bg-green-100 text-green-800' 
+                                    : 'border-gray-200 hover:border-green-300 hover:bg-green-50'
+                                }`}
+                                title={tool.description}
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <IconComponent className="h-4 w-4" />
+                                  <span className="text-xs font-medium">{tool.name}</span>
+                                </div>
+                                <p className="text-xs text-gray-600 mt-1">{tool.description}</p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        
+                        {activeDrawingTool && (
+                          <div className="bg-white p-3 rounded border border-green-200">
+                            <p className="text-xs text-green-700 mb-2">
+                              <strong>🎯 {DRAWING_TOOLS.find(t => t.id === activeDrawingTool)?.name} Tool Active</strong>
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              {activeDrawingTool === 'rectangle' 
+                                ? 'Click and drag from one corner to the opposite corner to create a rectangle.'
+                                : activeDrawingTool === 'circle'
+                                ? 'Click center point, then drag to set radius.'
+                                : 'Click on the map to add points. Double-click to finish the shape.'
+                              }
+                            </p>
+                            <div className="flex space-x-2 mt-2">
+                              <button 
+                                onClick={() => setActiveDrawingTool(null)}
+                                className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                              >
+                                Cancel Drawing
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  // Clear all drawn shapes
+                                  setAreasOfInterest([]);
+                                }}
+                                className="px-2 py-1 text-xs bg-red-200 text-red-700 rounded hover:bg-red-300"
+                              >
+                                Clear All Shapes
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* File Upload Mode */}
+                    {areaSelectionMode === 'upload' && (
+                      <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded">
+                        <h4 className="text-sm font-medium text-purple-800 mb-3 flex items-center">
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload Spatial Files
+                        </h4>
+                        
+                        {/* File Type Support */}
+                        <div className="mb-3">
+                          <h5 className="text-xs font-medium text-gray-700 mb-2">Supported File Types:</h5>
+                          <div className="grid grid-cols-1 gap-1">
+                            {SUPPORTED_FILE_TYPES.map(fileType => (
+                              <div key={fileType.id} className="flex items-center space-x-2 text-xs">
+                                <span className="text-base">{fileType.icon}</span>
+                                <span className="font-medium text-gray-700">{fileType.name}</span>
+                                <span className="text-gray-500">({fileType.extensions.join(', ')})</span>
+                                {(fileType.id === 'rar' || fileType.id === 'sevenz') && (
+                                  <span className="text-amber-600 text-xs">⚠️ Requires system tools</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* Additional format notes */}
+                          <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
+                            <p className="text-xs text-amber-800">
+                              <strong>Note:</strong> RAR files require the 'unrar' utility to be installed on the server. 
+                              7Z files require the 'py7zr' Python package. ZIP and TAR formats are recommended for maximum compatibility.
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* File Upload Area */}
+                        <div 
+                          className="border-2 border-dashed border-purple-300 rounded-lg p-4 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-25 transition-colors"
+                          onClick={() => fileInputRef.current?.click()}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.currentTarget.classList.add('border-purple-500', 'bg-purple-100');
+                          }}
+                          onDragLeave={(e) => {
+                            e.currentTarget.classList.remove('border-purple-500', 'bg-purple-100');
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.currentTarget.classList.remove('border-purple-500', 'bg-purple-100');
+                            const files = Array.from(e.dataTransfer.files);
+                            setUploadedFiles(prev => [...prev, ...files]);
+                            setUploadError(null); // Clear any previous errors
+                          }}
+                        >
+                          <File className="h-8 w-8 text-purple-400 mx-auto mb-2" />
+                          <p className="text-sm text-purple-700 font-medium">Click to upload or drag & drop files</p>
+                          <p className="text-xs text-purple-600 mt-1">
+                            GeoJSON (.geojson), compressed archives (.zip, .tar, .rar, .7z)
+                          </p>
+                          <p className="text-xs text-purple-500 mt-1 italic">
+                            For shapefiles: Package all files (.shp, .dbf, .prj, .shx) in a compressed archive
+                          </p>
+                          
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            accept=".zip,.tar,.gz,.bz2,.xz,.rar,.7z,.geojson,.json"
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || []);
+                              setUploadedFiles(prev => [...prev, ...files]);
+                              setUploadError(null); // Clear any previous errors
+                            }}
+                            className="hidden"
+                          />
+                        </div>
+                        
+                        {/* Uploaded Files List */}
+                        {uploadedFiles.length > 0 && (
+                          <div className="mt-3">
+                            <h5 className="text-xs font-medium text-gray-700 mb-2">Uploaded Files:</h5>
+                            <div className="space-y-2">
+                              {uploadedFiles.map((file, index) => (
+                                <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
+                                  <div className="flex items-center space-x-2">
+                                    <File className="h-3 w-3 text-gray-400" />
+                                    <span className="text-xs text-gray-700">{file.name}</span>
+                                    <span className="text-xs text-gray-500">({(file.size / 1024).toFixed(1)} KB)</span>
+                                  </div>
+                                  <button
+                                    onClick={() => setUploadedFiles(prev => prev.filter((_, i) => i !== index))}
+                                    className="text-xs text-red-600 hover:text-red-800"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex space-x-2 mt-3">
+                              <button 
+                                onClick={processUploadedFiles}
+                                disabled={isProcessingFiles}
+                                className={`px-3 py-1 text-xs rounded flex items-center space-x-1 ${
+                                  isProcessingFiles 
+                                    ? 'bg-purple-400 text-white cursor-not-allowed' 
+                                    : 'bg-purple-600 text-white hover:bg-purple-700'
+                                }`}
+                              >
+                                {isProcessingFiles && (
+                                  <svg className="animate-spin h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                )}
+                                <span>{isProcessingFiles ? 'Processing...' : 'Process Files'}</span>
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setUploadedFiles([]);
+                                  setUploadError(null); // Clear error when clearing files
+                                }}
+                                className="px-3 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                              >
+                                Clear All
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Upload Error Display */}
+                        {uploadError && (
+                          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
+                            <h5 className="text-xs font-medium text-red-800 mb-1 flex items-center">
+                              ⚠️ Upload Error
+                            </h5>
+                            <div className="text-xs text-red-700 whitespace-pre-wrap space-y-1">
+                              {uploadError.split('\n').map((line, index) => {
+                                if (line.trim().startsWith('•') || line.trim().startsWith('-')) {
+                                  return (
+                                    <div key={index} className="ml-2 flex items-start">
+                                      <span className="mr-2 text-red-600">•</span>
+                                      <span>{line.replace(/^[•\-]\s*/, '')}</span>
+                                    </div>
+                                  );
+                                } else if (line.trim().startsWith('Alternative:') || line.trim().startsWith('Note:')) {
+                                  return (
+                                    <div key={index} className="mt-2 p-2 bg-red-100 rounded text-red-800 font-medium">
+                                      {line}
+                                    </div>
+                                  );
+                                } else {
+                                  return <div key={index}>{line}</div>;
+                                }
+                              })}
+                            </div>
+                            <button
+                              onClick={() => setUploadError(null)}
+                              className="mt-2 px-2 py-1 text-xs bg-red-200 text-red-800 rounded hover:bg-red-300"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Areas of Interest Summary */}
+                    {areasOfInterest.length > 0 && (
+                      <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                        <h4 className="text-sm font-medium text-yellow-800 mb-2 flex items-center">
+                          🎯 Selected Areas of Interest ({areasOfInterest.length})
+                        </h4>
+                        <div className="space-y-2">
+                          {areasOfInterest.map((aoi, index) => (
+                            <div key={aoi.id} className="flex items-center justify-between bg-white p-2 rounded border">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-xs font-medium text-gray-700">{aoi.name}</span>
+                                  <span className={`text-xs px-2 py-1 rounded ${
+                                    aoi.type === 'rectangle' ? 'bg-blue-100 text-blue-700' :
+                                    aoi.type === 'circle' ? 'bg-green-100 text-green-700' :
+                                    aoi.type === 'polygon' ? 'bg-purple-100 text-purple-700' :
+                                    aoi.type === 'file' ? 'bg-orange-100 text-orange-700' :
+                                    'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {aoi.type}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-600 mt-1">
+                                  Area: {aoi.area.toFixed(2)} km² | 
+                                  CRS: {COORDINATE_SYSTEMS.find(cs => cs.id === aoi.coordinateSystem)?.code}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => setAreasOfInterest(prev => prev.filter((_, i) => i !== index))}
+                                className="text-xs text-red-600 hover:text-red-800 ml-2"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div className="mt-3 pt-2 border-t border-yellow-200">
+                          <div className="grid grid-cols-2 gap-2 text-xs text-yellow-700">
+                            <div>
+                              <span className="font-medium">Total Coverage:</span>
+                              <span className="ml-1">{areasOfInterest.reduce((sum, aoi) => sum + aoi.area, 0).toFixed(2)} km²</span>
+                            </div>
+                            <div>
+                              <span className="font-medium">Coordinate System:</span>
+                              <span className="ml-1">{COORDINATE_SYSTEMS.find(cs => cs.id === selectedCoordinateSystem)?.code}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Selection Summary */}
+                    {(selectedCoordinates || areasOfInterest.length > 0) && (
+                      <div className="mt-4 p-3 bg-gray-50 border border-gray-300 rounded">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <MapPin className="h-4 w-4 text-gray-600 inline mr-2" />
+                            <span className="text-xs font-medium text-gray-700">
+                              {areasOfInterest.length > 0 ? 
+                                `${areasOfInterest.length} area(s) selected` : 
+                                'Area defined'
+                              }
+                            </span>
+                          </div>
+                          <div className="flex space-x-2">
+                            <button 
+                              onClick={() => {
+                                // Preview on map
+                                console.log('Showing on map:', areasOfInterest);
+                              }}
+                              className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                            >
+                              <Eye className="h-3 w-3 inline mr-1" />
+                              Preview
+                            </button>
+                            <button 
+                              onClick={() => {
+                                setSelectedCoordinates('');
+                                setAreasOfInterest([]);
+                                setAreaSelectionMode('none');
+                                setActiveDrawingTool(null);
+                              }}
+                              className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                            >
+                              <RotateCcw className="h-3 w-3 inline mr-1" />
+                              Reset
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Date Range */}
+                  <div className="border-t pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-medium text-gray-700">Date Range</span>
+                      <div className="flex space-x-1">
+                        <button className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                          Cloud Cover
+                        </button>
+                        <button className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                          Result Options
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Search from:</label>
+                        <input
+                          type="date"
+                          value={searchCriteria.dateRange.start}
+                          onChange={(e) => setSearchCriteria(prev => ({
+                            ...prev,
+                            dateRange: { ...prev.dateRange, start: e.target.value }
+                          }))}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">to:</label>
+                        <input
+                          type="date"
+                          value={searchCriteria.dateRange.end}
+                          onChange={(e) => setSearchCriteria(prev => ({
+                            ...prev,
+                            dateRange: { ...prev.dateRange, end: e.target.value }
+                          }))}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Search months:</label>
+                        <select className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500">
+                          <option>(all)</option>
+                          <option>January</option>
+                          <option>February</option>
+                          <option>March</option>
+                          <option>April</option>
+                          <option>May</option>
+                          <option>June</option>
+                          <option>July</option>
+                          <option>August</option>
+                          <option>September</option>
+                          <option>October</option>
+                          <option>November</option>
+                          <option>December</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Data Sets Tab */}
+            {activeTab === 'datasets' && (
+              <div>
+                <div className="bg-gray-200 border-b border-gray-300 px-4 py-2">
+                  <h2 className="text-sm font-semibold text-gray-700">
+                    2. Select Data Sets, Formats & Products
+                  </h2>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Choose datasets, then select specific data formats and products. Click on items for detailed metadata.
+                  </p>
+                </div>
+                
+                <div className="p-4">
+                  {/* Dataset Categories */}
+                  {['Optical', 'Radar', 'Hyperspectral', 'Elevation', 'Derived', 'Thermal'].map(category => {
+                    const categoryDatasets = ZIMBABWE_DATASETS.filter(d => d.category === category);
+                    if (categoryDatasets.length === 0) return null;
+                    
+                    return (
+                      <div key={category} className="mb-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-semibold text-gray-700 border-b border-gray-300 pb-1">
+                            {category} Satellites ({categoryDatasets.length})
+                          </h3>
+                          <div className="flex space-x-1">
+                            <button 
+                              onClick={() => {
+                                const categoryIds = categoryDatasets.map(d => d.id);
+                                setSelectedDatasets(prev => [...new Set([...prev, ...categoryIds])]);
+                              }}
+                              className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                            >
+                              Select All
+                            </button>
+                            <button 
+                              onClick={() => {
+                                const categoryIds = categoryDatasets.map(d => d.id);
+                                setSelectedDatasets(prev => prev.filter(id => !categoryIds.includes(id)));
+                              }}
+                              className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                            >
+                              Deselect All
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-4">
+                          {categoryDatasets.map(dataset => (
+                            <div key={dataset.id} className="border border-gray-200 rounded p-3 hover:bg-gray-50">
+                              <div className="flex items-start space-x-3">
+                                <input
+                                  type="checkbox"
+                                  id={dataset.id}
+                                  checked={selectedDatasets.includes(dataset.id)}
+                                  onChange={() => toggleDataset(dataset.id)}
+                                  className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <label htmlFor={dataset.id} className="text-sm font-medium text-gray-700 cursor-pointer">
+                                      {dataset.name}
+                                    </label>
+                                    <button 
+                                      onClick={() => setExpandedDataset(expandedDataset === dataset.id ? null : dataset.id)}
+                                      className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
+                                    >
+                                      {expandedDataset === dataset.id ? 'Collapse' : 'Expand Options'}
+                                    </button>
+                                  </div>
+                                  <p className="text-xs text-gray-500 mt-1 mb-2">{dataset.description}</p>
+                                  
+                                  <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                                    <div>
+                                      <span className="font-medium text-gray-600">Provider:</span>
+                                      <span className="ml-1 text-gray-700">{dataset.provider}</span>
+                                    </div>
+                                    <div>
+                                      <span className="font-medium text-gray-600">Resolution:</span>
+                                      <span className="ml-1 text-gray-700">{dataset.resolution}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Expanded Options for Formats and Products */}
+                                  {expandedDataset === dataset.id && selectedDatasets.includes(dataset.id) && (
+                                    <div className="mt-4 p-3 bg-gray-50 rounded border">
+                                      {/* Data Formats Selection */}
+                                      <div className="mb-4">
+                                        <h4 className="text-sm font-medium text-gray-700 mb-2">📁 Select Data Formats:</h4>
+                                        <div className="grid grid-cols-1 gap-2">
+                                          {dataset.formats.map(format => (
+                                            <label key={format} className="flex items-center space-x-2 cursor-pointer">
+                                              <input
+                                                type="checkbox"
+                                                checked={searchCriteria.selectedFormats[dataset.id]?.includes(format) || false}
+                                                onChange={() => toggleFormat(dataset.id, format)}
+                                                className="h-3 w-3 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                              />
+                                              <span 
+                                                className="text-xs text-gray-700 hover:text-blue-600 cursor-pointer"
+                                                onClick={() => setSelectedMetadataItem({type: 'format', item: format, datasetId: dataset.id})}
+                                              >
+                                                {format}
+                                              </span>
+                                              <button
+                                                onClick={() => setSelectedMetadataItem({type: 'format', item: format, datasetId: dataset.id})}
+                                                className="text-xs text-blue-500 hover:text-blue-700"
+                                                title="View metadata"
+                                              >
+                                                ℹ️
+                                              </button>
+                                            </label>
+                                          ))}
+                                        </div>
+                                      </div>
+
+                                      {/* Data Products Selection */}
+                                      <div className="mb-4">
+                                        <h4 className="text-sm font-medium text-gray-700 mb-2">📊 Select Data Products:</h4>
+                                        <div className="grid grid-cols-1 gap-2">
+                                          {dataset.dataProducts.map(product => (
+                                            <label key={product} className="flex items-center space-x-2 cursor-pointer">
+                                              <input
+                                                type="checkbox"
+                                                checked={searchCriteria.selectedProducts[dataset.id]?.includes(product) || false}
+                                                onChange={() => toggleProduct(dataset.id, product)}
+                                                className="h-3 w-3 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                              />
+                                              <span 
+                                                className="text-xs text-gray-700 hover:text-green-600 cursor-pointer"
+                                                onClick={() => setSelectedMetadataItem({type: 'product', item: product, datasetId: dataset.id})}
+                                              >
+                                                {product}
+                                              </span>
+                                              <button
+                                                onClick={() => setSelectedMetadataItem({type: 'product', item: product, datasetId: dataset.id})}
+                                                className="text-xs text-green-500 hover:text-green-700"
+                                                title="View metadata"
+                                              >
+                                                ℹ️
+                                              </button>
+                                            </label>
+                                          ))}
+                                        </div>
+                                      </div>
+
+                                      {/* Selection Summary */}
+                                      <div className="text-xs text-gray-600 bg-white p-2 rounded border">
+                                        <p><strong>Selected:</strong> 
+                                          {(searchCriteria.selectedFormats[dataset.id]?.length || 0)} formats, 
+                                          {(searchCriteria.selectedProducts[dataset.id]?.length || 0)} products
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  <div className="flex items-center space-x-2 mt-2">
+                                    <span className={`text-xs px-2 py-1 rounded ${
+                                      category === 'Optical' ? 'bg-blue-100 text-blue-700' :
+                                      category === 'Radar' ? 'bg-green-100 text-green-700' :
+                                      category === 'Hyperspectral' ? 'bg-purple-100 text-purple-700' :
+                                      category === 'Elevation' ? 'bg-yellow-100 text-yellow-700' :
+                                      category === 'Derived' ? 'bg-orange-100 text-orange-700' :
+                                      'bg-red-100 text-red-700'
+                                    }`}>
+                                      {dataset.category}
+                                    </span>
+                                    <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
+                                      {dataset.spatialCoverage}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Metadata Information Panel */}
+                  {selectedMetadataItem && (
+                    <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-medium text-blue-800">
+                          📋 {selectedMetadataItem.type === 'format' ? 'Format' : 'Product'} Metadata: {selectedMetadataItem.item}
+                        </h4>
+                        <button 
+                          onClick={() => setSelectedMetadataItem(null)}
+                          className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
+                        >
+                          Close
+                        </button>
+                      </div>
+                      {(() => {
+                        const info = getMetadataInfo(selectedMetadataItem.type, selectedMetadataItem.item, selectedMetadataItem.datasetId);
+                        if (!info) return <p className="text-xs text-gray-600">No metadata available</p>;
+                        
+                        return (
+                          <div className="text-xs space-y-2">
+                            <p><strong>Description:</strong> {info.description}</p>
+                            {selectedMetadataItem.type === 'format' ? (
+                              <>
+                                <p><strong>File Size:</strong> {(info as any).fileSize}</p>
+                                <p><strong>Processing:</strong> {(info as any).processing}</p>
+                              </>
+                            ) : (
+                              <>
+                                <p><strong>Units:</strong> {(info as any).units}</p>
+                                <p><strong>Range:</strong> {(info as any).range}</p>
+                                <p><strong>Accuracy:</strong> {(info as any).accuracy}</p>
+                              </>
+                            )}
+                            <div>
+                              <strong>Applications:</strong>
+                              <ul className="ml-4 mt-1">
+                                {info.applications.map((app, idx) => (
+                                  <li key={idx} className="text-gray-600">• {app}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                  
+                  {/* Selected Datasets Summary */}
+                  <div className="mt-6 p-3 bg-green-50 border border-green-200 rounded">
+                    <h4 className="text-sm font-medium text-green-800 mb-2">
+                      📋 Selection Summary ({selectedDatasets.length} datasets)
+                    </h4>
+                    {selectedDatasets.length === 0 ? (
+                      <p className="text-xs text-gray-500 italic">No datasets selected. Please select datasets above to continue.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {selectedDatasets.map(id => {
+                          const dataset = ZIMBABWE_DATASETS.find(d => d.id === id);
+                          const selectedFormats = searchCriteria.selectedFormats[id] || [];
+                          const selectedProducts = searchCriteria.selectedProducts[id] || [];
+                          
+                          return dataset ? (
+                            <div key={id} className="text-xs bg-white p-2 rounded border">
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="font-medium text-gray-700">{dataset.name}</p>
+                                <span className={`text-xs px-2 py-1 rounded ${
+                                  dataset.category === 'Optical' ? 'bg-blue-100 text-blue-700' :
+                                  dataset.category === 'Radar' ? 'bg-green-100 text-green-700' :
+                                  dataset.category === 'Hyperspectral' ? 'bg-purple-100 text-purple-700' :
+                                  dataset.category === 'Elevation' ? 'bg-yellow-100 text-yellow-700' :
+                                  dataset.category === 'Derived' ? 'bg-orange-100 text-orange-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>
+                                  {dataset.category}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 gap-1">
+                                <div>
+                                  <span className="font-medium text-blue-600">📁 Formats ({selectedFormats.length}):</span>
+                                  <span className="ml-1 text-gray-600">
+                                    {selectedFormats.length > 0 ? selectedFormats.join(', ') : 
+                                     <span className="italic text-gray-400">None selected - will use default formats</span>}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="font-medium text-green-600">📊 Products ({selectedProducts.length}):</span>
+                                  <span className="ml-1 text-gray-600">
+                                    {selectedProducts.length > 0 ? selectedProducts.join(', ') : 
+                                     <span className="italic text-gray-400">None selected - will use all available products</span>}
+                                  </span>
+                                </div>
+                              </div>
+                              {(selectedFormats.length > 0 || selectedProducts.length > 0) && (
+                                <div className="mt-1 pt-1 border-t border-gray-200">
+                                  <span className="text-gray-500">Estimated downloads: </span>
+                                  <span className="font-medium text-gray-700">
+                                    {Math.max(selectedFormats.length, 1) * Math.max(selectedProducts.length, 1)} files per scene
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          ) : null;
+                        })}
+                        
+                        {/* Overall Summary Stats */}
+                        <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded">
+                          <h5 className="text-xs font-medium text-blue-800 mb-1">📊 Overall Selection Statistics</h5>
+                          <div className="grid grid-cols-2 gap-2 text-xs text-blue-700">
+                            <div>
+                              <span className="font-medium">Total Datasets:</span>
+                              <span className="ml-1">{selectedDatasets.length}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium">Unique Formats:</span>
+                              <span className="ml-1">{
+                                new Set(
+                                  selectedDatasets.flatMap(id => searchCriteria.selectedFormats[id] || [])
+                                ).size
+                              }</span>
+                            </div>
+                            <div>
+                              <span className="font-medium">Unique Products:</span>
+                              <span className="ml-1">{
+                                new Set(
+                                  selectedDatasets.flatMap(id => searchCriteria.selectedProducts[id] || [])
+                                ).size
+                              }</span>
+                            </div>
+                            <div>
+                              <span className="font-medium">Est. Total Files:</span>
+                              <span className="ml-1">{
+                                selectedDatasets.reduce((total, id) => {
+                                  const formats = searchCriteria.selectedFormats[id]?.length || 1;
+                                  const products = searchCriteria.selectedProducts[id]?.length || 1;
+                                  return total + (formats * products);
+                                }, 0)
+                              } per scene</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Quick Selection Actions */}
+                  <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">🚀 Quick Actions</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button 
+                        onClick={() => {
+                          // Select commonly used formats for all selected datasets
+                          const newFormats: Record<string, string[]> = {};
+                          selectedDatasets.forEach(id => {
+                            const dataset = ZIMBABWE_DATASETS.find(d => d.id === id);
+                            if (dataset) {
+                              newFormats[id] = dataset.formats.filter(f => ['GeoTIFF', 'NetCDF', 'HDF5'].includes(f));
+                            }
+                          });
+                          setSearchCriteria(prev => ({ ...prev, selectedFormats: newFormats }));
+                        }}
+                        className="text-xs bg-blue-100 text-blue-700 px-3 py-2 rounded hover:bg-blue-200"
+                      >
+                        Select Common Formats
+                      </button>
+                      <button 
+                        onClick={() => {
+                          // Select vegetation and agriculture products for applicable datasets
+                          const newProducts: Record<string, string[]> = {};
+                          selectedDatasets.forEach(id => {
+                            const dataset = ZIMBABWE_DATASETS.find(d => d.id === id);
+                            if (dataset) {
+                              newProducts[id] = dataset.dataProducts.filter(p => 
+                                ['NDVI', 'NDWI', 'EVI', 'LAI', 'Agriculture Index', 'Land Cover'].includes(p)
+                              );
+                            }
+                          });
+                          setSearchCriteria(prev => ({ ...prev, selectedProducts: newProducts }));
+                        }}
+                        className="text-xs bg-green-100 text-green-700 px-3 py-2 rounded hover:bg-green-200"
+                      >
+                        Select Agriculture Products
+                      </button>
+                      <button 
+                        onClick={() => {
+                          // Clear all format and product selections
+                          setSearchCriteria(prev => ({ ...prev, selectedFormats: {}, selectedProducts: {} }));
+                        }}
+                        className="text-xs bg-red-100 text-red-700 px-3 py-2 rounded hover:bg-red-200"
+                      >
+                        Clear All Selections
+                      </button>
+                      <button 
+                        onClick={() => {
+                          // Select all available formats and products for selected datasets
+                          const newFormats: Record<string, string[]> = {};
+                          const newProducts: Record<string, string[]> = {};
+                          selectedDatasets.forEach(id => {
+                            const dataset = ZIMBABWE_DATASETS.find(d => d.id === id);
+                            if (dataset) {
+                              newFormats[id] = [...dataset.formats];
+                              newProducts[id] = [...dataset.dataProducts];
+                            }
+                          });
+                          setSearchCriteria(prev => ({ 
+                            ...prev, 
+                            selectedFormats: newFormats,
+                            selectedProducts: newProducts
+                          }));
+                        }}
+                        className="text-xs bg-purple-100 text-purple-700 px-3 py-2 rounded hover:bg-purple-200"
+                      >
+                        Select All Available
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Additional Criteria Tab */}
+            {activeTab === 'additional' && (
+              <div>
+                <div className="bg-gray-200 border-b border-gray-300 px-4 py-2">
+                  <h2 className="text-sm font-semibold text-gray-700">
+                    3. Additional Criteria & Format Filters
+                  </h2>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Advanced filtering options for data quality, formats, processing levels, and specific product requirements.
+                  </p>
+                </div>
+                
+                <div className="p-4 space-y-6">
+                  {/* Cloud Cover */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Maximum Cloud Cover: {searchCriteria.cloudCover}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      value={searchCriteria.cloudCover}
+                      onChange={(e) => setSearchCriteria(prev => ({ ...prev, cloudCover: parseInt(e.target.value) }))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>0%</span>
+                      <span>25%</span>
+                      <span>50%</span>
+                      <span>75%</span>
+                      <span>100%</span>
+                    </div>
+                  </div>
+
+                  {/* Results Limit */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Results Limit
+                    </label>
+                    <select
+                      value={searchCriteria.resultsLimit}
+                      onChange={(e) => setSearchCriteria(prev => ({ ...prev, resultsLimit: parseInt(e.target.value) }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value={10}>10 records</option>
+                      <option value={25}>25 records</option>
+                      <option value={50}>50 records</option>
+                      <option value={100}>100 records</option>
+                      <option value={250}>250 records</option>
+                      <option value={500}>500 records</option>
+                    </select>
+                  </div>
+
+                  {/* Preferred Format Types */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      📁 Preferred Data Formats
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['GeoTIFF', 'NetCDF', 'HDF5', 'HDF', 'ENVI', 'SAFE', 'JP2', 'LAS', 'LAZ', 'GRIB'].map(format => (
+                        <label key={format} className="flex items-center space-x-2 cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            className="h-3 w-3 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
+                            defaultChecked={['GeoTIFF', 'NetCDF', 'HDF5'].includes(format)}
+                          />
+                          <span 
+                            className="text-xs text-gray-700 hover:text-blue-600 cursor-pointer"
+                            onClick={() => setSelectedMetadataItem({type: 'format', item: format, datasetId: 'general'})}
+                            title="Click for format details"
+                          >
+                            {format}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Product Categories */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      📊 Product Categories
+                    </label>
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="text-xs font-medium text-gray-600 mb-2">🌱 Vegetation & Agriculture</h4>
+                        <div className="grid grid-cols-2 gap-1">
+                          {['NDVI', 'EVI', 'LAI', 'fAPAR', 'Agriculture Index', 'Crop Health'].map(product => (
+                            <label key={product} className="flex items-center space-x-1 cursor-pointer">
+                              <input type="checkbox" className="h-3 w-3 text-green-600 border-gray-300 rounded focus:ring-green-500" defaultChecked />
+                              <span className="text-xs text-gray-700">{product}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h4 className="text-xs font-medium text-gray-600 mb-2">🌍 Environmental & Climate</h4>
+                        <div className="grid grid-cols-2 gap-1">
+                          {['LST', 'Fire Detection', 'Soil Moisture', 'NDWI', 'Snow Cover', 'Wind Speed'].map(product => (
+                            <label key={product} className="flex items-center space-x-1 cursor-pointer">
+                              <input type="checkbox" className="h-3 w-3 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                              <span className="text-xs text-gray-700">{product}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h4 className="text-xs font-medium text-gray-600 mb-2">🗻 Terrain & Geology</h4>
+                        <div className="grid grid-cols-2 gap-1">
+                          {['DTM', 'DSM', 'Slope', 'Aspect', 'Geological Indices', 'Mineral Detection'].map(product => (
+                            <label key={product} className="flex items-center space-x-1 cursor-pointer">
+                              <input type="checkbox" className="h-3 w-3 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500" />
+                              <span className="text-xs text-gray-700">{product}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Data Quality */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Data Quality Filter
+                    </label>
+                    <select className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500">
+                      <option>All Quality Levels</option>
+                      <option>Level 1 - Raw Data (DN values)</option>
+                      <option>Level 2 - Atmospherically Corrected (Surface Reflectance)</option>
+                      <option>Level 3 - Analysis Ready Data (ARD)</option>
+                      <option>Level 4 - Derived Products (Indices, Classifications)</option>
+                    </select>
+                  </div>
+
+                  {/* Processing Level */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Processing Level
+                    </label>
+                    <div className="space-y-2">
+                      <label className="flex items-center">
+                        <input type="checkbox" className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" defaultChecked />
+                        <span className="ml-2 text-sm text-gray-700">Level 1 (Raw Digital Numbers)</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input type="checkbox" className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" defaultChecked />
+                        <span className="ml-2 text-sm text-gray-700">Level 2 (Surface Reflectance)</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input type="checkbox" className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                        <span className="ml-2 text-sm text-gray-700">Level 3 (Analysis Ready Data)</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input type="checkbox" className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                        <span className="ml-2 text-sm text-gray-700">Level 4 (Derived Products)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Sensor Options */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Sensor Type Preferences
+                    </label>
+                    <div className="space-y-2">
+                      <label className="flex items-center">
+                        <input type="checkbox" className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" defaultChecked />
+                        <span className="ml-2 text-sm text-gray-700">Optical (Landsat, Sentinel-2, ZimSat-2)</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input type="checkbox" className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                        <span className="ml-2 text-sm text-gray-700">Radar (Sentinel-1, ALOS-2, GaoFen-3)</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input type="checkbox" className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                        <span className="ml-2 text-sm text-gray-700">Hyperspectral (PRISM, Hyperion)</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input type="checkbox" className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                        <span className="ml-2 text-sm text-gray-700">Thermal (MODIS, Landsat TIRS, Himawari-8)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Temporal Resolution */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Temporal Resolution Preference
+                    </label>
+                    <select className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500">
+                      <option>No Preference</option>
+                      <option>Sub-daily (Geostationary)</option>
+                      <option>Daily (MODIS, Himawari-8)</option>
+                      <option>Weekly Composite</option>
+                      <option>16-day Composite (MODIS)</option>
+                      <option>Monthly Composite</option>
+                      <option>Seasonal Composite</option>
+                      <option>Annual Composite</option>
+                    </select>
+                  </div>
+
+                  {/* Spatial Resolution */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Spatial Resolution Range
+                    </label>
+                    <div className="space-y-2">
+                      <label className="flex items-center">
+                        <input type="checkbox" className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
+                        <span className="ml-2 text-sm text-gray-700">Very High (&lt; 1m) - Commercial/Military</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input type="checkbox" className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500" defaultChecked />
+                        <span className="ml-2 text-sm text-gray-700">High (1-10m) - ZimSat-2, GaoFen, Sentinel-2</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input type="checkbox" className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500" defaultChecked />
+                        <span className="ml-2 text-sm text-gray-700">Medium (10-100m) - Landsat, Sentinel-1</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input type="checkbox" className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
+                        <span className="ml-2 text-sm text-gray-700">Coarse (&gt; 100m) - MODIS, Climate Data</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Output Format Preferences */}
+                  <div className="mt-6 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <h4 className="text-sm font-medium text-yellow-800 mb-2">Output Format Preferences</h4>
+                  </div>
+          </div>
+        )}
+
+        {/* Results Tab */}
+        {/* (Removed duplicate sidebar/main content block that caused the type error) */}
+        {/* Search Buttons - Always visible at bottom */}
+        <div className="border-t border-gray-300 p-3 bg-gray-50 flex-shrink-0">
+          <div className="text-center text-xs text-gray-600 mb-3 leading-tight">
+            The search result limit is {searchCriteria.resultsLimit} records; select a Country, 
+            Feature Class, and/or Feature Type to reduce your chances of exceeding this limit.
+          </div>
+          <div className="flex justify-center space-x-2">
+            <button
+              onClick={handleSearch}
+              disabled={isLoading || selectedDatasets.length === 0}
+              className="bg-blue-600 text-white px-4 py-1.5 rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            >
+              <Search className="h-3 w-3 mr-1" />
+              {isLoading ? 'Searching...' : 'Search'}
+            </button>
+            <button
+              onClick={handleClearSearch}
+              className="bg-red-600 text-white px-4 py-1.5 rounded text-xs font-medium hover:bg-red-700 flex items-center"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
+        {/* Main Content Area - Map and Results */}
+        <div className="flex-1 flex flex-col">
+          {/* Map Area */}
+          <div className="flex-1 relative">
+            <MapComponent
+              viewState={mapViewState}
+              height="100%"
+              drawingEnabled={activeDrawingTool !== null}
+              drawingMode={activeDrawingTool as 'polygon' | 'rectangle' | 'circle' | 'freehand' || 'polygon'}
+              showZimbabweBoundary={showZimbabweBoundary}
+              showSelectionBoundaries={showSelectionBoundaries}
+              selectedAOI={selectedAOI}
+              onDrawingComplete={(geometry) => {
+                console.log('Drawing completed:', geometry);
+                // Reset the active drawing tool after completion
+                setActiveDrawingTool(null);
+              }}
+            />
+            
+            </button>
+          </div>
+        </div>
+
+        {/* Main Content Area - Map and Results */}
+        <div className="flex-1 flex flex-col">
+          {/* Map Area */}
+          <div className="flex-1 relative">
+            <MapComponent
+              viewState={mapViewState}
+              height="100%"
+              drawingEnabled={activeDrawingTool !== null}
+              drawingMode={activeDrawingTool as 'polygon' | 'rectangle' | 'circle' | 'freehand' || 'polygon'}
+              showZimbabweBoundary={showZimbabweBoundary}
+              showSelectionBoundaries={showSelectionBoundaries}
+              selectedAOI={selectedAOI}
+              onDrawingComplete={(geometry) => {
+                console.log('Drawing completed:', geometry);
+                // Reset the active drawing tool after completion
+                setActiveDrawingTool(null);
+              }}
+            />
+            
+            {/* Enhanced Map Controls - Repositioned further down to avoid overlap with background layer controls */}
+            <div className="absolute top-24 right-4 space-y-2" style={{marginRight: '8px', zIndex: 2000}}>
+              {/* Zoom Controls */}
+              <div className="map-controls zoom-controls flex flex-col">
+                <button 
+                  className="map-control-button"
+                  onClick={() => setMapViewState(prev => ({...prev, zoom: Math.min(prev.zoom + 1, 18)}))}
+                  title="Zoom In"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+                <button 
+                  className="map-control-button"
+                  onClick={() => setMapViewState(prev => ({...prev, zoom: Math.max(prev.zoom - 1, 1)}))}
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Base Layer Selector */}
+              <div className="map-controls flex flex-col space-y-0 p-1">
+                <button 
+                  className="map-control-button active"
+                  title="Street Map"
+                >
+                  <MapPin className="h-4 w-4" />
+                </button>
+                <button 
+                  className="map-control-button"
+                  title="Terrain"
+                >
+                  <Mountain className="h-4 w-4" />
+                </button>
+                <button 
+                  className="map-control-button"
+                  title="Satellite"
+                >
+                  <Satellite className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Navigation Controls */}
+              <div className="map-controls flex flex-col space-y-0 p-1">
+                <button 
+                  className={`map-control-button ${is3DMode ? 'control-3d' : ''}`}
+                  onClick={() => setIs3DMode(!is3DMode)}
+                  title={is3DMode ? "Switch to 2D View" : "Switch to 3D View"}
+                >
+                  {is3DMode ? '2D' : '3D'}
+                </button>
+                <button 
+                  className="map-control-button"
+                  onClick={() => setMapRotation(0)}
+                  title="Reset North"
+                >
+                  <Navigation className="h-4 w-4" style={{transform: `rotate(${mapRotation}deg)`}} />
+                </button>
+                <button 
+                  className="map-control-button"
+                  onClick={() => setMapRotation(prev => (prev + 90) % 360)}
+                  title="Rotate Map"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </button>
+                <button 
+                  className="map-control-button"
+                  onClick={() => setMapViewState({ center: [-19.0154, 29.1549], zoom: 6 })}
+                  title="Fit to Zimbabwe"
+                >
+                  <Target className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Additional Tools */}
+              <div className="map-controls flex flex-col space-y-0 p-1">
+                <button 
+                  className="map-control-button"
+                  title="Layer Manager"
+                >
+                  <Layers className="h-4 w-4" />
+                </button>
+                <button 
+                  className="map-control-button"
+                  onClick={() => setShowMinimap(!showMinimap)}
+                  title="Toggle Minimap"
+                >
+                  <Maximize className="h-4 w-4" />
+                </button>
+                <button 
+                  className="map-control-button"
+                  title="Map Settings"
+                >
+                  <Settings className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Boundary Controls */}
+              <div className="map-controls flex flex-col space-y-0 p-1">
+                <button 
+                  className={`map-control-button ${showZimbabweBoundary ? 'active' : ''}`}
+                  onClick={() => setShowZimbabweBoundary(!showZimbabweBoundary)}
+                  title="Toggle Zimbabwe Boundary"
+                >
+                  <Square className="h-4 w-4" />
+                </button>
+                <button 
+                  className={`map-control-button ${showSelectionBoundaries ? 'active' : ''}`}
+                  onClick={() => setShowSelectionBoundaries(!showSelectionBoundaries)}
+                  title="Toggle Selection Boundaries"
+                >
+                  <Circle className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* North Arrow - Repositioned to avoid overlap with Draw AOI button */}
+            <div className="absolute top-16 left-4" style={{zIndex: 1500}}>
+              <div className="north-arrow" style={{transform: `rotate(${-mapRotation}deg)`}} title="North Direction"></div>
+            </div>
+
+            {/* Scale Bar - Better positioned with adequate margins */}
+            {showScale && (
+              <div className="absolute bottom-4 left-4 scale-bar" style={{zIndex: 1500}}>
+                <div className="text-center mb-1 text-gray-700">Scale</div>
+                <div className="scale-line"></div>
+                <div className="flex justify-between text-xs text-gray-600">
+                  <span>0</span>
+                  <span>10 km</span>
+                </div>
+              </div>
+            )}
+
+            {/* Coordinates Display - Better centered positioning */}
+            {showCoordinates && currentMousePosition && (
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 coordinates-display" style={{zIndex: 1500}}>
+                Lat: {currentMousePosition.lat.toFixed(6)}°, Lon: {currentMousePosition.lng.toFixed(6)}°
+              </div>
+            )}
+
+            {/* Minimap - Better positioned with proper margins from controls */}
+            {showMinimap && (
+              <div className="absolute bottom-4 right-4 minimap" style={{zIndex: 1500}}>
+                <div className="w-full h-full bg-gray-100 flex items-center justify-center text-xs text-gray-500">
+                  <div className="text-center">
+                    <Compass className="h-6 w-6 mx-auto mb-1" />
+                    <div>Overview Map</div>
+                    <div className="text-xs">Zimbabwe</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Enhanced Map Information Panel - Better positioned and always visible */}
+            <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg p-3 max-w-md border border-gray-200" style={{marginBottom: showScale ? '110px' : '0px', maxWidth: '280px', zIndex: 1600}}>
+              <div className="text-xs text-gray-600">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-semibold text-gray-800 text-sm">🗺️ Map Information</p>
+                  <div className="flex space-x-1">
+                    <button 
+                      onClick={() => setShowCoordinates(!showCoordinates)}
+                      className={`text-xs px-2 py-1 rounded ${showCoordinates ? 'bg-blue-100 text-blue-700' : 'bg-gray-100'}`}
+                      title="Toggle Coordinates"
+                    >
+                      GPS
+                    </button>
+                    <button 
+                      onClick={() => setShowScale(!showScale)}
+                      className={`text-xs px-2 py-1 rounded ${showScale ? 'bg-blue-100 text-blue-700' : 'bg-gray-100'}`}
+                      title="Toggle Scale"
+                    >
+                      Scale
+                    </button>
+                    <button 
+                      onClick={() => setShowZimbabweBoundary(!showZimbabweBoundary)}
+                      className={`text-xs px-2 py-1 rounded ${showZimbabweBoundary ? 'bg-green-100 text-green-700' : 'bg-gray-100'}`}
+                      title="Toggle Zimbabwe Boundary"
+                    >
+                      Boundary
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="font-medium">Center:</span>
+                    <div>{(-19.0154).toFixed(4)}°, {(29.1549).toFixed(4)}°</div>
+                  </div>
+                  <div>
+                    <span className="font-medium">Zoom:</span>
+                    <div>Level {mapViewState.zoom}/18</div>
+                  </div>
+                  <div>
+                    <span className="font-medium">Rotation:</span>
+                    <div>{mapRotation}°</div>
+                  </div>
+                  <div>
+                    <span className="font-medium">Mode:</span>
+                    <div>{is3DMode ? '3D' : '2D'} View</div>
+                  </div>
+                </div>
+                <div className="mt-2 text-xs">
+                  <span className="font-medium">CRS:</span> WGS84 (EPSG:4326)
+                </div>
+                <div className="mt-2 text-xs">
+                  <span className="font-medium">Boundaries:</span> 
+                  <span className={`ml-1 ${showZimbabweBoundary ? 'text-green-600' : 'text-gray-400'}`}>
+                    Zimbabwe: {showZimbabweBoundary ? 'ON' : 'OFF'}
+                  </span>
+                  <span className={`ml-2 ${showSelectionBoundaries ? 'text-blue-600' : 'text-gray-400'}`}>
+                    Selections: {showSelectionBoundaries ? 'ON' : 'OFF'}
+                  </span>
+                </div>
+                <div className="mt-2 p-2 text-xs text-amber-700 bg-amber-50 rounded border border-amber-200">
+                  ⚠️ Maps are for reference and search purposes only
+                </div>
+              </div>
+            </div>
+
+            {/* Enhanced Search Summary Overlay - Better positioned to avoid overlap */}
+            {imagery && (
+              <div className="absolute top-4 left-4 bg-white rounded-lg shadow-lg p-3 max-w-sm border border-gray-200" style={{marginLeft: '68px', zIndex: 1600}}>
+                <h4 className="text-sm font-semibold text-gray-800 mb-2 flex items-center">
+                  <Satellite className="h-4 w-4 mr-2 text-blue-600" />
+                  Search Results
+                </h4>
+                <div className="text-xs text-gray-600 space-y-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="font-medium">Location:</span>
+                      <div className="truncate">{searchCriteria.location}</div>
+                    </div>
+                    <div>
+                      <span className="font-medium">Results:</span>
+                      <div className="text-blue-600 font-semibold">{imagery.results?.length || 0} images</div>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="font-medium">Date Range:</span>
+                    <div>{searchCriteria.dateRange.start} to {searchCriteria.dateRange.end}</div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-medium">Datasets:</span>
+                      <span className="ml-1">{selectedDatasets.length} selected</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">Cloud:</span>
+                      <span className="ml-1">≤ {searchCriteria.cloudCover}%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Loading Overlay */}
+            {isLoading && (
+              <div className="absolute inset-0 bg-black bg-opacity-25 flex items-center justify-center">
+                <div className="bg-white rounded-lg p-6 flex items-center space-x-3">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  <span className="text-sm text-gray-700">Searching for satellite imagery...</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Results Footer */}
+          <div className="bg-white border-t border-gray-300 px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center space-x-3 text-xs text-gray-600">
+              {imagery && (
+                <>
+                  <span className="font-medium">Results: {imagery.results?.length || 0} images</span>
+                  <span>•</span>
+                  <span>Location: {searchCriteria.location}</span>
+                  <span>•</span>
+                  <span>Cloud ≤ {searchCriteria.cloudCover}%</span>
+                </>
+              )}
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <button className="text-xs text-blue-600 hover:text-blue-800 flex items-center px-2 py-1 rounded hover:bg-blue-50">
+                <Download className="h-3 w-3 mr-1" />
+                Bulk Download
+              </button>
+              <button className="text-xs text-blue-600 hover:text-blue-800 flex items-center px-2 py-1 rounded hover:bg-blue-50">
+                <Eye className="h-3 w-3 mr-1" />
+                Preview All
+              </button>
+              <button className="text-xs text-blue-600 hover:text-blue-800 flex items-center px-2 py-1 rounded hover:bg-blue-50">
+                <Info className="h-3 w-3 mr-1" />
+                Export Results
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ZimbabweExplorer;
