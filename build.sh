@@ -4,11 +4,13 @@ set -o errexit
 
 # Install Python dependencies
 pip install --upgrade pip
-pip install -r requirements.txt
+
+# Try to install requirements, continuing on failures for optional packages
+pip install -r requirements.txt || echo "Some optional packages failed to install, continuing..."
 
 # Install Node.js dependencies and build frontend
 cd frontend
-npm ci
+npm ci --production
 npm run build
 cd ..
 

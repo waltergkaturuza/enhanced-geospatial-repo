@@ -26,5 +26,5 @@ services:
     name: enhanced-geospatial-db
     env: postgresql
     plan: starter
-    databaseName: enhanced_geospatial
-    databaseUser: enhanced_geospatial_user
+    databaseName: geodb_clcz
+    databaseUser: geodb_clcz_user
