@@ -250,11 +250,14 @@ FILE_UPLOAD_PERMISSIONS = 0o644
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
-    os.path.join(BASE_DIR, 'frontend', 'dist'),  # Add frontend build output
 ]
 
-# WhiteNoise settings for compression
+# WhiteNoise settings for serving static files in production
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Ensure static files are properly served
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = True
 
 # REST Framework advanced configuration
 REST_FRAMEWORK.update({
