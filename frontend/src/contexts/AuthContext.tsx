@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { GeospatialAPI } from '../lib/api';
+import { GeospatialAPI } from '../lib/api.ts';
 import type { 
   SimpleUser, 
   LoginCredentials,
