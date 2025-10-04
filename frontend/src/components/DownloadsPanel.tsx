@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { GeospatialAPI } from '../lib/api';
-import { formatDate, getStatusColor } from '../lib/utils';
+import { GeospatialAPI } from '@/lib/api';
+import { formatDate, getStatusColor } from '@/lib/utils';
 import { Loader, AlertCircle, Calendar, FileDown } from 'lucide-react';
 
 const DownloadsPanel: React.FC = () => {

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { boundariesApi, type AdministrativeBoundary } from '../lib/api';
-import { formatDate, formatArea, cn, getErrorMessage } from '../lib/utils';
+import { boundariesApi, type AdministrativeBoundary } from '@/lib/api';
+import { formatDate, formatArea, cn, getErrorMessage } from '@/lib/utils';
 import { 
   Layers, 
   Upload, 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { GeospatialAPI, type AOI, type SatelliteImage } from '../lib/api';
-import { formatDate, formatFileSize, getCloudCoverColor, getProviderColor, getProviderName } from '../lib/utils';
+import { GeospatialAPI, type AOI, type SatelliteImage } from '@/lib/api';
+import { formatDate, formatFileSize, getCloudCoverColor, getProviderColor, getProviderName } from '@/lib/utils';
 import { 
   Satellite, 
   Cloud, 
