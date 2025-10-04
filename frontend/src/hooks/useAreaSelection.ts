@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { GeospatialAPI, type AOI } from '../lib/api';
-import type { AreaOfInterest } from '../types';
+import { GeospatialAPI, type AOI } from '@/lib/api';
+import type { AreaOfInterest } from '@/types';
 
 export const useAreaSelection = () => {
   const [areaSelectionMode, setAreaSelectionMode] = useState<'none' | 'coordinates' | 'drawing' | 'upload'>('none');

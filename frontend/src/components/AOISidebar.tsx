@@ -18,7 +18,7 @@ import {
   Globe
 } from 'lucide-react';
 import type { MapViewState } from './MapComponent';
-import { ZIMBABWE_PROVINCES, ZIMBABWE_DISTRICTS, ZIMBABWE_COORDINATES } from '../constants';
+import { ZIMBABWE_PROVINCES, ZIMBABWE_DISTRICTS, ZIMBABWE_COORDINATES } from '@/constants';
 
 interface AOISidebarProps {
   selectedAOI: AOI | null;

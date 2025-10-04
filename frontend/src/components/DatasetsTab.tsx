@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChevronDown, ChevronRight, Info, Satellite, Database, Globe, Eye } from 'lucide-react';
-import { ZIMBABWE_DATASETS, DATASET_METADATA } from '../constants';
+import { ZIMBABWE_DATASETS, DATASET_METADATA } from '@/constants';
 
 interface DatasetsTabProps {
   selectedDatasets: string[];

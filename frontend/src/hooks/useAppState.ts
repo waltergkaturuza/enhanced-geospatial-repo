@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { SearchCriteria } from '../types';
+import type { SearchCriteria } from '@/types';
 
 export const useAppState = () => {
   const [activeTab, setActiveTab] = useState<'search' | 'datasets' | 'additional' | 'upload' | 'results'>('search');

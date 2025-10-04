@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuthContext } from '../../contexts/AuthContext';
+import { useAuthContext } from '@/contexts/AuthContext';
 import { 
   User, 
   Building, 
@@ -13,7 +13,7 @@ import {
   AlertCircle,
   CheckCircle
 } from 'lucide-react';
-import { USER_ROLES, SUBSCRIPTION_PLANS } from '../../constants/auth';
+import { USER_ROLES, SUBSCRIPTION_PLANS } from '@/constants/auth';
 
 /**
  * UserProfile Component

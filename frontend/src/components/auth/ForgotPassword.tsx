@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuthContext } from '../../contexts/AuthContext';
+import { useAuthContext } from '@/contexts/AuthContext';
 import { ArrowLeft, Mail, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
 
 /**

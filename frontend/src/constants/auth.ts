@@ -1,6 +1,6 @@
 // Authentication and Authorization Constants
 
-import type { UserRole, Permission } from '../types/auth';
+import type { UserRole, Permission } from '@/types/auth';
 import { 
   Users, BarChart3, Briefcase, Database, ShoppingCart,
   Settings, FileText, Key, CreditCard, HelpCircle
