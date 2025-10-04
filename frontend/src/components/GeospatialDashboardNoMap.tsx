@@ -10,7 +10,7 @@ import MapComponent from './MapComponent';
 import AOISidebar from './AOISidebar';
 import BoundaryLayerPanel from './BoundaryLayerPanel';
 import ErrorBoundary from './ErrorBoundary';
-import { type AOI, type AdministrativeBoundary } from '../lib/api';
+import { type AOI, type AdministrativeBoundary } from '@/lib/api';
 
 interface MapViewState {
   center: [number, number];

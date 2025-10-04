@@ -18,7 +18,7 @@ import {
   Map,
   Database
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '@/lib/utils';
 
 // Enhanced file type definitions for comprehensive geospatial support
 interface FileTypeInfo {

@@ -1,5 +1,5 @@
 import { Play, Loader, AlertCircle, Calendar, Clock, CheckCircle, XCircle } from 'lucide-react';
-import { formatDate, formatRelativeTime } from '../lib/utils';
+import { formatDate, formatRelativeTime } from '@/lib/utils';
 
 // Mock data for now - would be replaced with real API calls
 const mockJobs = [

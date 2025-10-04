@@ -16,7 +16,7 @@ import {
   Zap,
   Database
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '@/lib/utils';
 import AdvancedUploadForm from './AdvancedUploadForm';
 import EnhancedUploadForm from './EnhancedUploadForm';
 

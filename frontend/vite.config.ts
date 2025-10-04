@@ -12,6 +12,7 @@ export default defineConfig({
       '@/components': resolve('./src/components'),
       '@/types': resolve('./src/types'),
       '@/contexts': resolve('./src/contexts'),
+      '@/hooks': resolve('./src/hooks'),
     },
   },
 })

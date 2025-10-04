@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Upload, File, X, CheckCircle, AlertTriangle, Clock, Satellite, Database, Globe, Plane } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '@/lib/utils';
 
 interface UploadedFile {
   id: string;
