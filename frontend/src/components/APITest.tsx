@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GeospatialAPI } from '@/lib/api';
+import { GeospatialAPI } from '@/lib';
 
 const APITest: React.FC = () => {
   const [status, setStatus] = useState<string>('Testing...');

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { GeospatialAPI, type AOI } from '@/lib/api';
+import { GeospatialAPI, type AOI } from '@/lib';
 import { formatDate, formatArea, cn, getErrorMessage } from '@/lib/utils';
 import { 
   Upload, 

@@ -16,7 +16,7 @@ import {
   Info
 } from 'lucide-react';
 import MapComponent from './MapComponent';
-import { type AOI } from '@/lib/api';
+import { type AOI } from '@/lib';
 
 interface MapContainerProps {
   mapViewState: {

@@ -15,7 +15,7 @@ import ImageryPanel from './ImageryPanel';
 import JobsPanel from './JobsPanel';
 import DownloadsPanel from './DownloadsPanel';
 import ErrorBoundary from './ErrorBoundary';
-import { type AOI, type AdministrativeBoundary } from '@/lib/api';
+import { type AOI, type AdministrativeBoundary } from '@/lib';
 
 interface MapViewState {
   center: [number, number];
