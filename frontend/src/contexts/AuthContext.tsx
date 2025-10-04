@@ -100,7 +100,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error(response.message || 'Login failed');
       }
     } catch (error: any) {
-      const errorMessage = error.message || 'Login failed. Please check your credentials.';
+      console.error('Login error details:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      
+      let errorMessage = 'Login failed. Please check your credentials.';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Login endpoint not found. Please check your server configuration.';
+      } else if (error.response?.status >= 500) {
+        errorMessage = 'Server error. Please try again later.';
+      } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {

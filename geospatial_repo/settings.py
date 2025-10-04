@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # 'django.contrib.gis',  # Temporarily disabled - requires PostGIS
     'rest_framework',
+    'rest_framework.authtoken',  # For token authentication
     # 'rest_framework_gis',  # Temporarily disabled - depends on django.contrib.gis
     'corsheaders',
     'imagery',

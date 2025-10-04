@@ -4,9 +4,16 @@ from . import upload_handler
 from . import file_manager_api
 from . import ai_metadata_extractor
 from . import enhanced_views
+from . import auth_views
 
 # API URL patterns for the geospatial application
 urlpatterns = [
+    # Authentication endpoints
+    path('auth/login/', auth_views.login_view, name='auth-login'),
+    path('auth/signup/', auth_views.signup_view, name='auth-signup'),
+    path('auth/logout/', auth_views.logout_view, name='auth-logout'),
+    path('auth/profile/', auth_views.user_profile, name='auth-profile'),
+    
     # System management endpoints
     path('system/parse-metadata/', views_simple.parse_metadata, name='system-parse-metadata'),
     path('system/upload-files/', views_simple.upload_files, name='system-upload-files'),
