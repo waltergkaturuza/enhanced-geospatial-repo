@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import Navigation from './Navigation';
 import Sidebar from './Sidebar';
 import MapContainer from './MapContainer';
-import { GeospatialAPI } from '@/lib/api';
-import { useAppState, useSearchHandlers, useMapState, useAreaSelection } from '@/hooks';
+import { GeospatialAPI } from '../lib/api';
+import { useAppState, useSearchHandlers, useMapState, useAreaSelection } from '../hooks';
 
 const ZimbabweExplorer: React.FC = () => {
   // Main application state

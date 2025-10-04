@@ -17,5 +17,6 @@ export default defineConfig({
       '@/assets': resolve('./src/assets'),
       '@/tests': resolve('./src/tests'),
     },
+    extensions: ['.js', '.ts', '.jsx', '.tsx', '.json'],
   },
 })
