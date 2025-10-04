@@ -8,14 +8,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve('./src'),
-      '@/lib': resolve('./src/lib'),
-      '@/components': resolve('./src/components'),
-      '@/types': resolve('./src/types'),
-      '@/contexts': resolve('./src/contexts'),
-      '@/hooks': resolve('./src/hooks'),
-      '@/constants': resolve('./src/constants'),
-      '@/assets': resolve('./src/assets'),
-      '@/tests': resolve('./src/tests'),
     },
     extensions: ['.js', '.ts', '.jsx', '.tsx', '.json'],
   },
