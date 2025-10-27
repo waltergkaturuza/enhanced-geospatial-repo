@@ -23,6 +23,9 @@ from . import views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('imagery.urls')),
+    # Serve static files (CSS, JS, etc.) from frontend build
+    re_path(r'^static/(?P<path>.*)$', views.serve_static_files, name='static'),
+    re_path(r'^assets/(?P<path>.*)$', views.serve_static_files, name='assets'),
     # Catch all other routes and serve React app (for React Router)
     re_path(r'^.*$', views.index, name='index'),
 ]

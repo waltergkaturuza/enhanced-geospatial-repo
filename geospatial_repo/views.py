@@ -3,6 +3,7 @@ from django.http import HttpResponse, Http404
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.cache import never_cache
+from django.views.static import serve
 import os
 
 @never_cache
@@ -57,3 +58,13 @@ def index(request):
         </body>
         </html>
         """, content_type='text/html')
+
+def serve_static_files(request, path):
+    """Serve static files from frontend dist directory"""
+    if not settings.DEBUG:
+        # In production, serve from staticfiles
+        return serve(request, path, document_root=settings.STATIC_ROOT)
+    else:
+        # In development, serve from frontend dist
+        frontend_dist = os.path.join(settings.BASE_DIR, 'frontend', 'dist')
+        return serve(request, path, document_root=frontend_dist)
