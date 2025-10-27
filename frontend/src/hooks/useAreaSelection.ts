@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GeospatialAPI, type AOI } from '@/lib';
+import { GeospatialAPI, type AOI } from '@/lib/api';
 import type { AreaOfInterest } from '@/types';
 
 export const useAreaSelection = () => {
