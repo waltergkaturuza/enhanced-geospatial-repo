@@ -8,10 +8,8 @@ const getApiBaseUrl = (): string => {
     return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
   }
   
-  // In production, use the same domain as the frontend
-  const protocol = window.location.protocol;
-  const host = window.location.host;
-  return `${protocol}//${host}/api`;
+  // In production, use the backend domain
+  return 'https://enhanced-geospatial-repo.onrender.com/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();
