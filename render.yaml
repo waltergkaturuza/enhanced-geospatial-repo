@@ -7,6 +7,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: NODE_VERSION
+        value: 22.16.0
       - key: DJANGO_SETTINGS_MODULE
         value: geospatial_repo.settings
       - key: DEBUG
