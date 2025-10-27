@@ -5,9 +5,15 @@ import { resolve } from 'path'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  build: {
+    sourcemap: true,
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
+  },
   resolve: {
     alias: {
-      '@': resolve('./src'),
+      '@': resolve(__dirname, './src'),
     },
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
   },
