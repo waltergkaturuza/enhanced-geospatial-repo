@@ -5,11 +5,14 @@ import { resolve } from 'path'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  base: '/',
   build: {
     sourcemap: true,
     commonjsOptions: {
       transformMixedEsModules: true,
     },
+    outDir: 'dist',
+    assetsDir: 'assets',
   },
   resolve: {
     alias: {
