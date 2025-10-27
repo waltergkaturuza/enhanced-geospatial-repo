@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { boundariesApi, type AdministrativeBoundarySet, type AdministrativeBoundary } from '../lib/api';
+import { boundariesApi, type AdministrativeBoundarySet, type AdministrativeBoundary } from '../lib/api.ts';
 import { formatDate, formatArea, cn, getErrorMessage } from '@/lib/utils';
 import { 
   Upload, 

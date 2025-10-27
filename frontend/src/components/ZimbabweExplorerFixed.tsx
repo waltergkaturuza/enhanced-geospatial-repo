@@ -13,7 +13,7 @@ import {
   Plus
 } from 'lucide-react';
 import MapComponent from './MapComponent';
-import { GeospatialAPI } from '../lib/api';
+import { GeospatialAPI } from '../lib/api.ts';
 
 interface SearchCriteria {
   location: string;

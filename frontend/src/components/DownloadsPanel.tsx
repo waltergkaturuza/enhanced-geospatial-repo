@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { GeospatialAPI } from '../lib/api';
+import { GeospatialAPI } from '../lib/api.ts';
 import { formatDate, getStatusColor } from '@/lib/utils';
 import { Loader, AlertCircle, Calendar, FileDown } from 'lucide-react';
 

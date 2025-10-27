@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import '@geoman-io/leaflet-geoman-free';
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
 import { cn } from '@/lib/utils';
-import type { AOI, AdministrativeBoundary } from '../lib/api';
+import type { AOI, AdministrativeBoundary } from '../lib/api.ts';
 
 // Fix for default markers in Leaflet with Vite
 delete (L.Icon.Default.prototype as any)._getIconUrl;
