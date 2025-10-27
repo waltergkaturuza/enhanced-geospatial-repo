@@ -13,6 +13,8 @@ def index(request):
     # Debug logging
     print(f"Index view called for path: {request.path}")
     print(f"DEBUG setting: {settings.DEBUG}")
+    print(f"DEBUG type: {type(settings.DEBUG)}")
+    print(f"Environment DEBUG: {os.environ.get('DEBUG', 'Not set')}")
     
     # In production, serve the built React app
     if not settings.DEBUG:
