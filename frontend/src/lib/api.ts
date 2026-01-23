@@ -3,15 +3,19 @@ import type { AxiosInstance, AxiosResponse } from 'axios';
 
 // API Configuration - automatically detect environment
 const getApiBaseUrl = (): string => {
-  // In development, use environment variable or localhost
-  if (import.meta.env.DEV) {
-    return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+  // Check for explicit API URL configuration first (works in both dev and prod)
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
   }
   
-  // In production, use the same domain as the frontend (Django serves both)
-  const protocol = window.location.protocol;
-  const host = window.location.host;
-  return `${protocol}//${host}/api`;
+  // In development, use localhost
+  if (import.meta.env.DEV) {
+    return 'http://localhost:8000/api';
+  }
+  
+  // In production, use the configured backend URL
+  // Default to the backend Render service if not explicitly set
+  return 'https://enhanced-geospatial-repo.onrender.com/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();

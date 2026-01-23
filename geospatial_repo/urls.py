@@ -23,9 +23,8 @@ from . import views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('imagery.urls')),
-    # Catch all other routes and serve React app (for React Router)
-    # This MUST be last to allow admin and api routes to work
-    re_path(r'^(?!static/)(?!admin/)(?!api/).*$', views.index, name='index'),
+    # Note: Frontend is deployed separately on Render as a static site
+    # This backend only serves API and admin routes
 ]
 
 # Serve static files in development
