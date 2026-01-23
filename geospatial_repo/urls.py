@@ -23,13 +23,9 @@ from . import views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('imagery.urls')),
-    # Serve static files (CSS, JS, etc.) from frontend build
-    re_path(r'^static/(?P<path>.*)$', views.serve_static_files, name='static'),
-    re_path(r'^assets/(?P<path>.*)$', views.serve_static_files, name='assets'),
-    # Serve vite.svg and other public assets
-    re_path(r'^vite\.svg$', views.serve_static_files, {'path': 'vite.svg'}, name='vite_svg'),
     # Catch all other routes and serve React app (for React Router)
-    re_path(r'^.*$', views.index, name='index'),
+    # This MUST be last to allow admin and api routes to work
+    re_path(r'^(?!static/)(?!admin/)(?!api/).*$', views.index, name='index'),
 ]
 
 # Serve static files in development

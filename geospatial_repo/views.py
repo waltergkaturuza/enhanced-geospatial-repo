@@ -10,16 +10,31 @@ import os
 @csrf_exempt
 def index(request):
     """Serve the React app for all routes (React Router handles client-side routing)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     # Debug logging
-    print(f"Index view called for path: {request.path}")
-    print(f"DEBUG setting: {settings.DEBUG}")
+    logger.info(f"Index view called for path: {request.path}")
+    logger.info(f"DEBUG setting: {settings.DEBUG}")
+    logger.info(f"BASE_DIR: {settings.BASE_DIR}")
     
     # In production, serve the built React app
     if not settings.DEBUG:
         try:
             index_file_path = os.path.join(settings.BASE_DIR, 'frontend', 'dist', 'index.html')
-            print(f"Looking for index.html at: {index_file_path}")
-            print(f"File exists: {os.path.exists(index_file_path)}")
+            logger.info(f"Looking for index.html at: {index_file_path}")
+            logger.info(f"File exists: {os.path.exists(index_file_path)}")
+            
+            # Check if frontend directory exists
+            frontend_dir = os.path.join(settings.BASE_DIR, 'frontend')
+            logger.info(f"Frontend directory exists: {os.path.exists(frontend_dir)}")
+            
+            if os.path.exists(frontend_dir):
+                dist_dir = os.path.join(frontend_dir, 'dist')
+                logger.info(f"Dist directory exists: {os.path.exists(dist_dir)}")
+                if os.path.exists(dist_dir):
+                    dist_contents = os.listdir(dist_dir)
+                    logger.info(f"Dist directory contents: {dist_contents}")
             
             with open(index_file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -29,25 +44,42 @@ def index(request):
                 response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
                 response['Pragma'] = 'no-cache'
                 response['Expires'] = '0'
-                print(f"Serving React app for path: {request.path}")
+                logger.info(f"Successfully serving React app for path: {request.path}")
                 return response
         except FileNotFoundError as e:
-            print(f"FileNotFoundError: {e}")
+            logger.error(f"FileNotFoundError: {e}")
             return HttpResponse(f"""
-            <h1>Frontend Not Built</h1>
-            <p>The React frontend has not been built yet.</p>
-            <p>Looking for: {index_file_path}</p>
-            <p>API is available at <a href="/api/">/api/</a></p>
-            <p>Admin is available at <a href="/admin/">/admin/</a></p>
-            """, content_type='text/html')
+            <!DOCTYPE html>
+            <html>
+            <head><title>Frontend Not Built</title></head>
+            <body>
+                <h1>Frontend Not Built</h1>
+                <p>The React frontend has not been built yet.</p>
+                <p><strong>Looking for:</strong> {index_file_path}</p>
+                <p><strong>BASE_DIR:</strong> {settings.BASE_DIR}</p>
+                <p>This usually means the build script didn't complete successfully during deployment.</p>
+                <hr>
+                <p>API is available at <a href="/api/">/api/</a></p>
+                <p>Admin is available at <a href="/admin/">/admin/</a></p>
+            </body>
+            </html>
+            """, content_type='text/html', status=500)
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            logger.error(f"Unexpected error: {e}", exc_info=True)
             return HttpResponse(f"""
-            <h1>Error Loading Frontend</h1>
-            <p>Error: {str(e)}</p>
-            <p>API is available at <a href="/api/">/api/</a></p>
-            <p>Admin is available at <a href="/admin/">/admin/</a></p>
-            """, content_type='text/html')
+            <!DOCTYPE html>
+            <html>
+            <head><title>Error Loading Frontend</title></head>
+            <body>
+                <h1>Error Loading Frontend</h1>
+                <p><strong>Error:</strong> {str(e)}</p>
+                <p><strong>Error Type:</strong> {type(e).__name__}</p>
+                <hr>
+                <p>API is available at <a href="/api/">/api/</a></p>
+                <p>Admin is available at <a href="/admin/">/admin/</a></p>
+            </body>
+            </html>
+            """, content_type='text/html', status=500)
     else:
         # In development, show a helpful message
         return HttpResponse("""
