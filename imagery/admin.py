@@ -31,6 +31,7 @@ admin.site.index_title = "System Administration Dashboard"
 class UserProfileInline(admin.StackedInline):
     """Inline admin for UserProfile"""
     model = UserProfile
+    fk_name = 'user'  # Specify which ForeignKey to use (user, not approved_by)
     can_delete = False
     verbose_name_plural = "Profile"
     fields = (

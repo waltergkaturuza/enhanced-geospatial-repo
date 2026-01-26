@@ -117,7 +117,13 @@ def system_status(request):
         from django.utils import timezone
         from datetime import timedelta
         import os
-        import psutil
+        
+        # Try to import psutil, but handle gracefully if not available
+        try:
+            import psutil
+            PSUTIL_AVAILABLE = True
+        except ImportError:
+            PSUTIL_AVAILABLE = False
         
         # Get user metrics
         total_users = User.objects.count()
@@ -130,13 +136,13 @@ def system_status(request):
         db_response_time = int((timezone.now() - start_time).total_seconds() * 1000)
         
         # Get storage metrics
+        storage_used = 0.0
+        storage_total = 100.0  # Default 100GB
+        
         try:
-            storage_used = 0.0
-            storage_total = 100.0  # Default 100GB
-            
             # Try to get actual storage usage
-            if hasattr(settings, 'MEDIA_ROOT'):
-                media_root = settings.MEDIA_ROOT
+            if hasattr(settings, 'MEDIA_ROOT') and settings.MEDIA_ROOT:
+                media_root = str(settings.MEDIA_ROOT)
                 if os.path.exists(media_root):
                     total_size = sum(
                         os.path.getsize(os.path.join(dirpath, filename))
@@ -144,7 +150,8 @@ def system_status(request):
                         for filename in filenames
                     )
                     storage_used = total_size / (1024 ** 3)  # Convert to GB
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Could not calculate storage usage: {e}")
             pass
         
         # Get system performance metrics
