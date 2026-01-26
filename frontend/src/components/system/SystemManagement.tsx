@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
   BarChart3, 
   Users, 
@@ -38,7 +39,22 @@ const navItems: NavItem[] = [
 ];
 
 const SystemManagement: React.FC = () => {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<SystemTab>('dashboard');
+
+  // Detect URL path and set appropriate tab
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.includes('/admin/roles')) {
+      setActiveTab('roles');
+    } else if (path.includes('/admin/approvals')) {
+      setActiveTab('users'); // User Approvals is part of User Management
+    } else if (path.includes('/admin/system')) {
+      setActiveTab('dashboard');
+    } else if (path === '/admin') {
+      setActiveTab('dashboard');
+    }
+  }, [location.pathname]);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -105,7 +121,7 @@ const SystemManagement: React.FC = () => {
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-screen-2xl mx-auto">
+          <div className="max-w-screen-2xl mx-auto" style={{ paddingLeft: '10mm', paddingRight: '10mm' }}>
             {renderContent()}
           </div>
         </main>

@@ -11,7 +11,12 @@ import {
   Shield, 
   Bell,
   ChevronDown,
-  FolderTree
+  FolderTree,
+  LayoutDashboard,
+  Satellite,
+  BarChart3,
+  Briefcase,
+  ShoppingCart
 } from 'lucide-react';
 
 /**
@@ -32,13 +37,13 @@ export const MainNavigation: React.FC = () => {
       {
         name: 'Dashboard',
         href: '/dashboard',
-        icon: Globe,
+        icon: LayoutDashboard,
         show: !!user
       },
       {
         name: 'Imagery',
         href: '/imagery',
-        icon: Globe,
+        icon: Satellite,
         show: user && hasModuleAccess('imagery')
       },
       {
@@ -50,19 +55,19 @@ export const MainNavigation: React.FC = () => {
       {
         name: 'Analytics',
         href: '/analytics',
-        icon: Globe,
+        icon: BarChart3,
         show: user && hasModuleAccess('analytics')
       },
       {
         name: 'Business',
         href: '/business',
-        icon: Globe,
+        icon: Briefcase,
         show: user && hasModuleAccess('business')
       },
       {
         name: 'Store',
         href: '/store',
-        icon: Globe,
+        icon: ShoppingCart,
         show: user && hasModuleAccess('business')
       },
       {
@@ -92,16 +97,16 @@ export const MainNavigation: React.FC = () => {
   };
 
   return (
-    <nav className="bg-white shadow-lg border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <nav className="shadow-lg" style={{ backgroundColor: '#1877F2' }}>
+      <div style={{ paddingLeft: '10mm', paddingRight: '10mm' }}>
         <div className="flex justify-between h-16">
           {/* Logo and primary navigation */}
           <div className="flex">
             {/* Logo */}
             <div className="flex-shrink-0 flex items-center">
               <Link to={user ? "/dashboard" : "/"} className="flex items-center space-x-2">
-                <Globe className="h-8 w-8 text-indigo-600" />
-                <span className="text-xl font-bold text-gray-900">
+                <Globe className="h-8 w-8 text-white" />
+                <span className="text-xl font-bold text-white">
                   GeoSpatial
                 </span>
               </Link>
@@ -113,10 +118,10 @@ export const MainNavigation: React.FC = () => {
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200 ${
+                  className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-colors duration-200 ${
                     isActiveRoute(item.href)
-                      ? 'border-indigo-500 text-gray-900'
-                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                      ? 'border-white text-white'
+                      : 'border-transparent text-white/90 hover:border-white/50 hover:text-white'
                   }`}
                 >
                   <item.icon className="h-4 w-4 mr-2" />
@@ -131,27 +136,27 @@ export const MainNavigation: React.FC = () => {
             {user ? (
               <>
                 {/* Notifications */}
-                <button className="p-2 text-gray-400 hover:text-gray-500 relative">
+                <button className="p-2 text-white/90 hover:text-white relative">
                   <Bell className="h-6 w-6" />
-                  <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400 ring-2 ring-white" />
+                  <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-[#1877F2]" />
                 </button>
 
                 {/* Profile dropdown */}
                 <div className="relative">
                   <button
                     onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
-                    className="flex items-center space-x-3 text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    className="flex items-center space-x-3 text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white"
                   >
-                    <div className="h-8 w-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                      <User className="h-5 w-5 text-indigo-600" />
+                    <div className="h-8 w-8 bg-white/20 rounded-full flex items-center justify-center">
+                      <User className="h-5 w-5 text-white" />
                     </div>
                     <div className="hidden md:block text-left">
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-semibold text-white">
                         {user.firstName} {user.lastName}
                       </div>
-                      <div className="text-xs text-gray-500">{user.role}</div>
+                      <div className="text-xs text-white/80">{user.role}</div>
                     </div>
-                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                    <ChevronDown className="h-4 w-4 text-white/90" />
                   </button>
 
                   {/* Dropdown menu */}
@@ -213,13 +218,13 @@ export const MainNavigation: React.FC = () => {
               <div className="flex items-center space-x-4">
                 <Link
                   to="/login"
-                  className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
+                  className="text-white/90 hover:text-white px-3 py-2 rounded-md text-sm font-semibold"
                 >
                   Sign in
                 </Link>
                 <Link
                   to="/signup"
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                  className="bg-white hover:bg-white/90 text-[#1877F2] px-4 py-2 rounded-md text-sm font-semibold"
                 >
                   Sign up
                 </Link>
@@ -230,7 +235,7 @@ export const MainNavigation: React.FC = () => {
             <div className="md:hidden">
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+                className="inline-flex items-center justify-center p-2 rounded-md text-white/90 hover:text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
               >
                 {isMobileMenuOpen ? (
                   <X className="h-6 w-6" />
@@ -245,16 +250,16 @@ export const MainNavigation: React.FC = () => {
 
       {/* Mobile menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden">
-          <div className="pt-2 pb-3 space-y-1 bg-white border-t border-gray-200">
+        <div className="md:hidden" style={{ backgroundColor: '#1877F2' }}>
+          <div className="pt-2 pb-3 space-y-1 border-t border-white/20">
             {navigationItems.map((item) => (
               <Link
                 key={item.name}
                 to={item.href}
-                className={`flex items-center pl-3 pr-4 py-2 border-l-4 text-base font-medium ${
+                className={`flex items-center pl-3 pr-4 py-2 border-l-4 text-base font-semibold ${
                   isActiveRoute(item.href)
-                    ? 'bg-indigo-50 border-indigo-500 text-indigo-700'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 hover:border-gray-300'
+                    ? 'bg-white/20 border-white text-white'
+                    : 'border-transparent text-white/90 hover:text-white hover:bg-white/10 hover:border-white/50'
                 }`}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
@@ -265,22 +270,22 @@ export const MainNavigation: React.FC = () => {
           </div>
 
           {user && (
-            <div className="pt-4 pb-3 border-t border-gray-200">
+            <div className="pt-4 pb-3 border-t border-white/20">
               <div className="flex items-center px-4">
-                <div className="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                  <User className="h-6 w-6 text-indigo-600" />
+                <div className="h-10 w-10 bg-white/20 rounded-full flex items-center justify-center">
+                  <User className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-3">
-                  <div className="text-base font-medium text-gray-800">
+                  <div className="text-base font-semibold text-white">
                     {user.firstName} {user.lastName}
                   </div>
-                  <div className="text-sm font-medium text-gray-500">{user.email}</div>
+                  <div className="text-sm font-medium text-white/80">{user.email}</div>
                 </div>
               </div>
               <div className="mt-3 space-y-1">
                 <Link
                   to="/profile"
-                  className="flex items-center px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                  className="flex items-center px-4 py-2 text-base font-medium text-white/90 hover:text-white hover:bg-white/10"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   <User className="h-5 w-5 mr-3" />
@@ -288,7 +293,7 @@ export const MainNavigation: React.FC = () => {
                 </Link>
                 <Link
                   to="/settings"
-                  className="flex items-center px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                  className="flex items-center px-4 py-2 text-base font-medium text-white/90 hover:text-white hover:bg-white/10"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   <Settings className="h-5 w-5 mr-3" />
@@ -296,7 +301,7 @@ export const MainNavigation: React.FC = () => {
                 </Link>
                 <button
                   onClick={handleLogout}
-                  className="flex items-center w-full text-left px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                  className="flex items-center w-full text-left px-4 py-2 text-base font-medium text-white/90 hover:text-white hover:bg-white/10"
                 >
                   <LogOut className="h-5 w-5 mr-3" />
                   Sign out

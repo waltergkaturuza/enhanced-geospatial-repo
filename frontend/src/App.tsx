@@ -245,7 +245,7 @@ function App() {
                 }
               />
               
-              {/* Admin routes */}
+              {/* Admin routes - All integrated into SystemManagement */}
               <Route
                 path="/admin"
                 element={
@@ -253,12 +253,12 @@ function App() {
                     requiredPermissions={['admin_access']}
                     requiredModules={['admin']}
                   >
-                    <MainNavigation />
-                    <AdminDashboard />
+                    <SystemManagement />
                   </ProtectedRoute>
                 }
               />
               
+              {/* Legacy routes redirect to SystemManagement with appropriate tab */}
               <Route
                 path="/admin/roles"
                 element={
@@ -266,8 +266,7 @@ function App() {
                     requiredPermissions={['manage_users']}
                     requiredModules={['admin']}
                   >
-                    <MainNavigation />
-                    <RoleManagement />
+                    <SystemManagement />
                   </ProtectedRoute>
                 }
               />
@@ -279,8 +278,7 @@ function App() {
                     requiredPermissions={['approve_users', 'admin_access']}
                     requiredModules={['admin']}
                   >
-                    <MainNavigation />
-                    <UserApproval />
+                    <SystemManagement />
                   </ProtectedRoute>
                 }
               />

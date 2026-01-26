@@ -79,32 +79,7 @@ const AdminDashboard: React.FC = () => {
     networkUsage: 0
   });
 
-  const [services, setServices] = useState<ServiceStatus[]>([
-    {
-      name: 'Django Backend',
-      status: 'healthy',
-      details: '8 connections',
-      metrics: '122ms'
-    },
-    {
-      name: 'PostgreSQL Database',
-      status: 'healthy',
-      details: '44 sessions',
-      metrics: '99.9% uptime'
-    },
-    {
-      name: 'Static Storage',
-      status: 'healthy',
-      details: '19.0% used',
-      metrics: '0.1 GB / 100GB'
-    },
-    {
-      name: 'API Gateway',
-      status: 'healthy',
-      details: '132 requests',
-      metrics: '0.34% errors'
-    }
-  ]);
+  const [services, setServices] = useState<ServiceStatus[]>([]);
 
   const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
   const [alerts, setAlerts] = useState<SystemAlert[]>([]);
@@ -119,61 +94,65 @@ const AdminDashboard: React.FC = () => {
       const statusResponse = await fetch(`${apiBaseUrl}/system/status/`, { headers });
       if (statusResponse.ok) {
         const statusData = await statusResponse.json();
-        if (statusData.success) {
+        if (statusData.success && statusData.data) {
+          const data = statusData.data;
+          
           // Update metrics from API response
           setMetrics(prev => ({
             ...prev,
-            totalUsers: statusData.data?.total_users || 0,
-            activeUsers: statusData.data?.active_users || 0,
-            databaseResponseTime: statusData.data?.db_response_time || 0,
-            storageUsed: statusData.data?.storage_used || 0,
-            storageTotal: statusData.data?.storage_total || 100,
-            apiCalls: statusData.data?.api_calls || 0,
-            errorRate: statusData.data?.error_rate || 0
+            totalUsers: data.total_users || 0,
+            activeUsers: data.active_users || 0,
+            databaseResponseTime: data.db_response_time || 0,
+            storageUsed: data.storage_used || 0,
+            storageTotal: data.storage_total || 100,
+            apiCalls: data.api_calls || 0,
+            errorRate: data.error_rate || 0
           }));
 
           // Update performance metrics
-          if (statusData.data?.performance) {
+          if (data.performance) {
             setPerformance({
-              cpuUsage: statusData.data.performance.cpu || 0,
-              memoryUsage: statusData.data.performance.memory || 0,
-              diskUsage: statusData.data.performance.disk || 0,
-              networkUsage: statusData.data.performance.network || 0
+              cpuUsage: data.performance.cpu || 0,
+              memoryUsage: data.performance.memory || 0,
+              diskUsage: data.performance.disk || 0,
+              networkUsage: data.performance.network || 0
             });
+          }
+
+          // Update service status
+          if (data.services && Array.isArray(data.services)) {
+            setServices(data.services.map((service: any) => ({
+              name: service.name,
+              status: service.status || 'healthy',
+              details: service.details || '',
+              metrics: service.metrics || ''
+            })));
+          }
+
+          // Update security events from API
+          if (data.security_events && Array.isArray(data.security_events)) {
+            setSecurityEvents(data.security_events.map((event: any) => ({
+              id: event.id || '',
+              type: event.type || 'LOGIN',
+              action: event.action || 'LOGIN SUCCESS',
+              ipAddress: event.ipAddress || 'N/A',
+              timestamp: event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString(),
+              status: event.status || 'success'
+            })));
+          }
+
+          // Update alerts from API
+          if (data.alerts && Array.isArray(data.alerts)) {
+            setAlerts(data.alerts.map((alert: any) => ({
+              id: alert.id || '',
+              level: alert.level || 'success',
+              title: alert.title || '',
+              message: alert.message || '',
+              timestamp: alert.timestamp ? new Date(alert.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()
+            })));
           }
         }
       }
-
-      // Mock security events (replace with actual API call)
-      setSecurityEvents([
-        {
-          id: 'e5eb3c1e-30cd-4966-928e-9b9a15b8e0f5',
-          type: 'LOGIN',
-          action: 'LOGIN SUCCESS',
-          ipAddress: '41.174.184.62',
-          timestamp: new Date().toLocaleTimeString(),
-          status: 'success'
-        },
-        {
-          id: 'a1b2c3d4-5678-90ef-ghij-klmnopqrstuv',
-          type: 'LOGIN',
-          action: 'LOGIN SUCCESS',
-          ipAddress: '192.168.1.100',
-          timestamp: new Date(Date.now() - 3600000).toLocaleTimeString(),
-          status: 'success'
-        }
-      ]);
-
-      // Mock alerts (replace with actual API call)
-      setAlerts([
-        {
-          id: '1',
-          level: 'success',
-          title: 'Database Online',
-          message: 'PostgreSQL database is operational with 8 active connections',
-          timestamp: new Date().toLocaleTimeString()
-        }
-      ]);
     } catch (error) {
       console.error('Error fetching system data:', error);
     } finally {
@@ -217,7 +196,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6" style={{ paddingLeft: '10mm', paddingRight: '10mm' }}>
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Total Users Card */}
