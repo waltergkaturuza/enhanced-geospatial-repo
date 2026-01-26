@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -103,18 +103,18 @@ const LandingPage = () => (
           Powerful geospatial data analysis and visualization tools
         </p>
         <div className="mt-8 space-x-4">
-          <a
-            href="/signup"
+          <Link
+            to="/signup"
             className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
           >
             Get Started
-          </a>
-          <a
-            href="/login"
+          </Link>
+          <Link
+            to="/login"
             className="inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
           >
             Sign In
-          </a>
+          </Link>
         </div>
       </div>
       
