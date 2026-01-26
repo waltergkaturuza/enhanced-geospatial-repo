@@ -2,7 +2,11 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from .models import UserProfile
+from django.contrib.auth.decorators import login_required
+from django.utils import timezone
+from datetime import timedelta
+from .models import UserProfile, AOI, Download, ProcessingJob, IndexResult
+from django.db.models import Count, Sum, Q
 import json
 import logging
 
@@ -502,4 +506,181 @@ def reject_user(request):
         return JsonResponse({
             'success': False,
             'message': f'Error rejecting user: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def dashboard_stats(request):
+    """Get dashboard statistics for the authenticated user"""
+    try:
+        if not request.user.is_authenticated:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        user = request.user
+        
+        # Get active projects (AOIs)
+        active_projects = AOI.objects.filter(user=user).count()
+        
+        # Get data downloads count
+        data_downloads = Download.objects.filter(user=user).count()
+        
+        # Get analysis jobs count (processing jobs)
+        analysis_jobs = ProcessingJob.objects.filter(user=user).count()
+        
+        # Get storage used (sum of download file sizes)
+        storage_used_gb = Download.objects.filter(
+            user=user
+        ).aggregate(
+            total_size=Sum('file_size_gb')
+        )['total_size'] or 0.0
+        
+        # Format storage
+        if storage_used_gb < 1:
+            storage_display = f"{storage_used_gb * 1024:.1f} MB"
+        else:
+            storage_display = f"{storage_used_gb:.1f} GB"
+        
+        stats = {
+            'active_projects': active_projects,
+            'data_downloads': data_downloads,
+            'analysis_jobs': analysis_jobs,
+            'storage_used': storage_display,
+            'storage_used_gb': storage_used_gb
+        }
+        
+        return JsonResponse({
+            'success': True,
+            'data': stats
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting dashboard stats: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error getting dashboard stats: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def dashboard_activity(request):
+    """Get recent activity for the authenticated user"""
+    try:
+        if not request.user.is_authenticated:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        user = request.user
+        activities = []
+        
+        # Get recent downloads (last 10)
+        recent_downloads = Download.objects.filter(
+            user=user
+        ).order_by('-requested_at')[:5]
+        
+        for download in recent_downloads:
+            activities.append({
+                'id': f"download_{download.id}",
+                'type': 'download',
+                'title': f'Downloaded {download.aoi.name if download.aoi else "imagery"}',
+                'timestamp': download.requested_at,
+                'icon': 'download'
+            })
+        
+        # Get recent processing jobs (last 10)
+        recent_jobs = ProcessingJob.objects.filter(
+            user=user
+        ).order_by('-submitted_at')[:5]
+        
+        for job in recent_jobs:
+            job_type_display = job.job_type.replace('_', ' ').title()
+            activities.append({
+                'id': f"job_{job.id}",
+                'type': 'analysis',
+                'title': f'Completed {job_type_display} job',
+                'timestamp': job.completed_at or job.submitted_at,
+                'icon': 'analysis'
+            })
+        
+        # Get recent AOIs (last 5)
+        recent_aois = AOI.objects.filter(
+            user=user
+        ).order_by('-created_at')[:3]
+        
+        for aoi in recent_aois:
+            activities.append({
+                'id': f"aoi_{aoi.id}",
+                'type': 'upload',
+                'title': f'Created AOI: {aoi.name}',
+                'timestamp': aoi.created_at,
+                'icon': 'upload'
+            })
+        
+        # Get recent index results (last 5)
+        recent_indices = IndexResult.objects.filter(
+            aoi__user=user
+        ).order_by('-computed_at')[:3]
+        
+        for index in recent_indices:
+            activities.append({
+                'id': f"index_{index.id}",
+                'type': 'analysis',
+                'title': f'Computed {index.index_type} for {index.aoi.name}',
+                'timestamp': index.computed_at,
+                'icon': 'analysis'
+            })
+        
+        # Sort by timestamp (most recent first) and limit to 10
+        activities.sort(key=lambda x: x['timestamp'], reverse=True)
+        activities = activities[:10]
+        
+        # Format timestamps to relative time
+        now = timezone.now()
+        formatted_activities = []
+        for activity in activities:
+            timestamp = activity['timestamp']
+            if isinstance(timestamp, str):
+                from django.utils.dateparse import parse_datetime
+                timestamp = parse_datetime(timestamp)
+            
+            if timestamp:
+                delta = now - timestamp
+                if delta.days > 0:
+                    if delta.days == 1:
+                        time_str = '1 day ago'
+                    else:
+                        time_str = f'{delta.days} days ago'
+                elif delta.seconds >= 3600:
+                    hours = delta.seconds // 3600
+                    time_str = f'{hours} hour{"s" if hours > 1 else ""} ago'
+                elif delta.seconds >= 60:
+                    minutes = delta.seconds // 60
+                    time_str = f'{minutes} minute{"s" if minutes > 1 else ""} ago'
+                else:
+                    time_str = 'Just now'
+            else:
+                time_str = 'Unknown'
+            
+            formatted_activities.append({
+                'id': activity['id'],
+                'type': activity['type'],
+                'title': activity['title'],
+                'timestamp': time_str,
+                'icon': activity['icon']
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'data': formatted_activities
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting dashboard activity: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error getting dashboard activity: {str(e)}'
         }, status=500)

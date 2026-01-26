@@ -20,6 +20,10 @@ urlpatterns = [
     path('system/status/', views_simple.system_status, name='system-status'),
     path('system/processing-queue/', views_simple.processing_queue, name='system-processing-queue'),
     
+    # Dashboard endpoints
+    path('dashboard/stats/', views_simple.dashboard_stats, name='dashboard-stats'),
+    path('dashboard/activity/', views_simple.dashboard_activity, name='dashboard-activity'),
+    
     # Enhanced upload endpoints
     path('upload/satellite-imagery/', upload_handler.upload_satellite_imagery, name='upload-satellite-imagery'),
     path('upload/status/', upload_handler.get_upload_status, name='upload-status'),

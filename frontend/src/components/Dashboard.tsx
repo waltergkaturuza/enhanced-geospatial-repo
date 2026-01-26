@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { ApprovalStatusBanner } from './ApprovalStatusBanner';
+import { getApiBaseUrl, getAuthHeaders } from '@/lib/api';
 import { 
   Globe, 
   BarChart3, 
@@ -24,6 +25,124 @@ import {
  */
 export const Dashboard: React.FC = () => {
   const { user, hasModuleAccess, hasPermission } = useAuthContext();
+  const [stats, setStats] = useState([
+    {
+      title: 'Active Projects',
+      value: '0',
+      icon: Globe,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-100'
+    },
+    {
+      title: 'Data Downloads',
+      value: '0',
+      icon: Download,
+      color: 'text-green-600',
+      bgColor: 'bg-green-100'
+    },
+    {
+      title: 'Analysis Jobs',
+      value: '0',
+      icon: BarChart3,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-100'
+    },
+    {
+      title: 'Storage Used',
+      value: '0 GB',
+      icon: Database,
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-100'
+    }
+  ]);
+  const [recentActivity, setRecentActivity] = useState<Array<{
+    id: string;
+    type: string;
+    title: string;
+    timestamp: string;
+    icon: any;
+  }>>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchDashboardData();
+    }
+  }, [user]);
+
+  const fetchDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      const apiBaseUrl = getApiBaseUrl();
+      const headers = getAuthHeaders();
+
+      // Fetch stats
+      const statsResponse = await fetch(`${apiBaseUrl}/dashboard/stats/`, { headers });
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json();
+        if (statsData.success) {
+          setStats([
+            {
+              title: 'Active Projects',
+              value: statsData.data.active_projects.toString(),
+              icon: Globe,
+              color: 'text-blue-600',
+              bgColor: 'bg-blue-100'
+            },
+            {
+              title: 'Data Downloads',
+              value: statsData.data.data_downloads.toString(),
+              icon: Download,
+              color: 'text-green-600',
+              bgColor: 'bg-green-100'
+            },
+            {
+              title: 'Analysis Jobs',
+              value: statsData.data.analysis_jobs.toString(),
+              icon: BarChart3,
+              color: 'text-purple-600',
+              bgColor: 'bg-purple-100'
+            },
+            {
+              title: 'Storage Used',
+              value: statsData.data.storage_used,
+              icon: Database,
+              color: 'text-orange-600',
+              bgColor: 'bg-orange-100'
+            }
+          ]);
+        }
+      }
+
+      // Fetch recent activity
+      const activityResponse = await fetch(`${apiBaseUrl}/dashboard/activity/`, { headers });
+      if (activityResponse.ok) {
+        const activityData = await activityResponse.json();
+        if (activityData.success) {
+          const iconMap: Record<string, any> = {
+            'download': Download,
+            'analysis': BarChart3,
+            'upload': MapPin,
+            'purchase': ShoppingCart
+          };
+          
+          const formattedActivity = activityData.data.map((activity: any) => ({
+            id: activity.id,
+            type: activity.type,
+            title: activity.title,
+            timestamp: activity.timestamp,
+            icon: iconMap[activity.icon] || Activity
+          }));
+          
+          setRecentActivity(formattedActivity);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   console.log('Dashboard render - User state:', {
     hasUser: !!user,
@@ -45,38 +164,6 @@ export const Dashboard: React.FC = () => {
       </div>
     );
   }
-
-  // Quick stats - in real app, these would come from API
-  const stats = [
-    {
-      title: 'Active Projects',
-      value: '12',
-      icon: Globe,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100'
-    },
-    {
-      title: 'Data Downloads',
-      value: '48',
-      icon: Download,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100'
-    },
-    {
-      title: 'Analysis Jobs',
-      value: '6',
-      icon: BarChart3,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100'
-    },
-    {
-      title: 'Storage Used',
-      value: '2.4 GB',
-      icon: Database,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100'
-    }
-  ];
 
   // Module cards with access control
   const moduleCards = [
@@ -156,61 +243,33 @@ export const Dashboard: React.FC = () => {
     }
   ];
 
-  // Recent activity - mock data
-  const recentActivity = [
-    {
-      id: 1,
-      type: 'download',
-      title: 'Downloaded Landsat 8 imagery for Zimbabwe',
-      timestamp: '2 hours ago',
-      icon: Download
-    },
-    {
-      id: 2,
-      type: 'analysis',
-      title: 'Completed NDVI analysis job',
-      timestamp: '5 hours ago',
-      icon: BarChart3
-    },
-    {
-      id: 3,
-      type: 'upload',
-      title: 'Uploaded custom boundary data',
-      timestamp: '1 day ago',
-      icon: MapPin
-    },
-    {
-      id: 4,
-      type: 'purchase',
-      title: 'Purchased high-resolution imagery',
-      timestamp: '2 days ago',
-      icon: ShoppingCart
-    }
-  ];
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <div className="max-w-screen-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-screen-2xl mx-auto py-8" style={{ paddingLeft: '10mm', paddingRight: '10mm' }}>
         {/* Approval Status Banner */}
         <ApprovalStatusBanner />
         
-        {/* Welcome Header with Futuristic Design */}
+        {/* Welcome Header with Facebook Blue Top Bar */}
         <div className="mb-10 relative">
           <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-purple-600/10 rounded-2xl blur-3xl"></div>
-          <div className="relative backdrop-blur-sm bg-white/60 rounded-2xl p-8 border border-white/20 shadow-xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  Welcome back, {user.firstName}!
-                </h1>
-                <p className="mt-2 text-base text-gray-600 flex items-center">
-                  <Activity className="h-4 w-4 mr-2 text-blue-500" />
-                  Here's what's happening with your geospatial data today.
-                </p>
-              </div>
-              <div className="hidden lg:flex items-center space-x-4">
-                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                  {user.firstName.charAt(0)}
+          <div className="relative backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl overflow-hidden">
+            {/* Facebook Blue Top Bar */}
+            <div className="w-full h-2" style={{ backgroundColor: '#1877F2' }}></div>
+            <div className="bg-white/60 p-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                    Welcome back, {user.firstName}!
+                  </h1>
+                  <p className="mt-2 text-base text-gray-600 flex items-center">
+                    <Activity className="h-4 w-4 mr-2 text-blue-500" />
+                    Here's what's happening with your geospatial data today.
+                  </p>
+                </div>
+                <div className="hidden lg:flex items-center space-x-4">
+                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                    {user.firstName.charAt(0)}
+                  </div>
                 </div>
               </div>
             </div>
@@ -219,7 +278,12 @@ export const Dashboard: React.FC = () => {
 
         {/* Stats Grid - Futuristic Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          {stats.map((stat, index) => (
+          {isLoading ? (
+            <div className="col-span-4 text-center py-8 text-gray-500">
+              Loading statistics...
+            </div>
+          ) : (
+            stats.map((stat, index) => (
             <div 
               key={stat.title} 
               className="group relative bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-gray-100/50 hover:border-blue-200"
@@ -247,23 +311,24 @@ export const Dashboard: React.FC = () => {
                 <div className={`absolute bottom-0 left-0 right-0 h-1 ${stat.bgColor} opacity-50 group-hover:opacity-100 transition-opacity`}></div>
               </div>
             </div>
-          ))}
+            ))
+          )}
         </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-        {/* Module Access Cards - Wider Layout */}
-        <div className="xl:col-span-3">
-          <div className="flex items-center justify-between mb-8">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+          {/* Module Access Cards - Wider Layout */}
+          <div className="xl:col-span-3">
+            <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl font-bold text-gray-900 flex items-center">
               <div className="h-8 w-1 bg-gradient-to-b from-blue-600 to-purple-600 rounded-full mr-4"></div>
               Available Modules
             </h2>
-            <div className="text-sm text-gray-500">
-              {moduleCards.filter(m => m.hasAccess).length} of {moduleCards.length} modules available
+              <div className="text-sm text-gray-500">
+                {moduleCards.filter(m => m.hasAccess).length} of {moduleCards.length} modules available
+              </div>
             </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {moduleCards.map((module, index) => (
               <div
                 key={module.title}
@@ -329,71 +394,81 @@ export const Dashboard: React.FC = () => {
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-
-        {/* Sidebar - Modern Design */}
-        <div className="space-y-6">
-          {/* Recent Activity */}
-          <div className="relative bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
-            {/* Decorative element */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl"></div>
-            
-            <div className="relative px-6 py-4 border-b border-gray-200/50 bg-white/50 backdrop-blur-sm">
-              <h3 className="text-lg font-bold text-gray-900 flex items-center">
-                <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg p-2 mr-3">
-                  <Activity className="h-4 w-4 text-white" />
-                </div>
-                Recent Activity
-              </h3>
             </div>
-            
-            <div className="divide-y divide-gray-100">
-              {recentActivity.map((activity, index) => (
-                <div 
-                  key={activity.id} 
-                  className="px-6 py-4 hover:bg-blue-50/50 transition-colors duration-200 cursor-pointer group"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0">
-                      <div className="bg-gray-100 group-hover:bg-blue-100 rounded-lg p-2 transition-colors">
-                        <activity.icon className="h-4 w-4 text-gray-600 group-hover:text-blue-600 transition-colors" />
+          </div>
+
+          {/* Sidebar - Modern Design */}
+          <div className="space-y-6">
+            {/* Recent Activity */}
+            <div className="relative bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+              {/* Decorative element */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl"></div>
+              
+              <div className="relative px-6 py-4 border-b border-gray-200/50 bg-white/50 backdrop-blur-sm">
+                <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                  <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg p-2 mr-3">
+                    <Activity className="h-4 w-4 text-white" />
+                  </div>
+                  Recent Activity
+                </h3>
+              </div>
+              
+              <div className="divide-y divide-gray-100">
+                {isLoading ? (
+                  <div className="px-6 py-8 text-center text-gray-500">
+                    Loading activity...
+                  </div>
+                ) : recentActivity.length === 0 ? (
+                  <div className="px-6 py-8 text-center text-gray-500">
+                    No recent activity
+                  </div>
+                ) : (
+                  recentActivity.map((activity, index) => (
+                    <div 
+                      key={activity.id} 
+                      className="px-6 py-4 hover:bg-blue-50/50 transition-colors duration-200 cursor-pointer group"
+                      style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                      <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0">
+                          <div className="bg-gray-100 group-hover:bg-blue-100 rounded-lg p-2 transition-colors">
+                            <activity.icon className="h-4 w-4 text-gray-600 group-hover:text-blue-600 transition-colors" />
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-900 font-medium group-hover:text-blue-900">{activity.title}</p>
+                          <p className="text-xs text-gray-500 mt-1">{activity.timestamp}</p>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900 font-medium group-hover:text-blue-900">{activity.title}</p>
-                      <p className="text-xs text-gray-500 mt-1">{activity.timestamp}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  ))
+                )}
+              </div>
+              
+              <div className="px-6 py-3 bg-gradient-to-r from-blue-50/50 to-purple-50/50 backdrop-blur-sm">
+                <button className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center group">
+                  View all activity
+                  <svg className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            
-            <div className="px-6 py-3 bg-gradient-to-r from-blue-50/50 to-purple-50/50 backdrop-blur-sm">
-              <button className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center group">
-                View all activity
-                <svg className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </button>
-            </div>
-          </div>
 
-          {/* Quick Actions - Modern Design */}
-          <div className="relative bg-gradient-to-br from-white to-blue-50/30 rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-full blur-3xl"></div>
-            
-            <div className="relative px-6 py-4 border-b border-gray-200/50 bg-white/50 backdrop-blur-sm">
-              <h3 className="text-lg font-bold text-gray-900 flex items-center">
-                <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg p-2 mr-3">
-                  <Settings className="h-4 w-4 text-white" />
-                </div>
-                Quick Actions
-              </h3>
-            </div>
-            
-            <div className="px-6 py-4 space-y-2">
+            {/* Quick Actions - Modern Design */}
+            <div className="relative bg-gradient-to-br from-white to-blue-50/30 rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-full blur-3xl"></div>
+              
+              <div className="relative px-6 py-4 border-b border-gray-200/50 bg-white/50 backdrop-blur-sm">
+                <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                  <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg p-2 mr-3">
+                    <Settings className="h-4 w-4 text-white" />
+                  </div>
+                  Quick Actions
+                </h3>
+              </div>
+              
+              <div className="px-6 py-4 space-y-2">
               {hasModuleAccess('imagery') && (
                 <button 
                   onClick={() => window.location.href = '/imagery'}
@@ -471,54 +546,54 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Account Summary - Premium Card */}
-          <div className="relative bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl shadow-2xl overflow-hidden">
-            {/* Animated gradient background */}
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-purple-600/20 to-pink-600/20 animate-pulse"></div>
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(120,119,198,0.3),transparent_50%)]"></div>
-            
-            <div className="relative px-6 py-4 border-b border-white/10">
-              <h3 className="text-lg font-bold text-white flex items-center">
-                <Users className="h-5 w-5 mr-2 text-blue-400" />
-                Account Summary
-              </h3>
-            </div>
-            
-            <div className="relative px-6 py-5 space-y-4">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-300">Subscription:</span>
-                <span className="font-bold text-white capitalize px-3 py-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full text-xs">
-                  {user.subscriptionPlan}
-                </span>
+            {/* Account Summary - Premium Card */}
+            <div className="relative bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+              {/* Animated gradient background */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-purple-600/20 to-pink-600/20 animate-pulse"></div>
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(120,119,198,0.3),transparent_50%)]"></div>
+              
+              <div className="relative px-6 py-4 border-b border-white/10">
+                <h3 className="text-lg font-bold text-white flex items-center">
+                  <Users className="h-5 w-5 mr-2 text-blue-400" />
+                  Account Summary
+                </h3>
               </div>
               
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-300">Role:</span>
-                <span className="font-semibold text-white capitalize">
-                  {user.role.replace('_', ' ')}
-                </span>
-              </div>
-              
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-300">Member Since:</span>
-                <span className="font-semibold text-white">
-                  {new Date(user.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-              
-              <div className="pt-4 border-t border-white/10">
-                <button 
-                  onClick={() => window.location.href = '/profile'}
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 px-4 rounded-xl text-sm font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
-                >
-                  Manage Account
-                </button>
+              <div className="relative px-6 py-5 space-y-4">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-300">Subscription:</span>
+                  <span className="font-bold text-white capitalize px-3 py-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full text-xs">
+                    {user.subscriptionPlan}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-300">Role:</span>
+                  <span className="font-semibold text-white capitalize">
+                    {user.role.replace('_', ' ')}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-300">Member Since:</span>
+                  <span className="font-semibold text-white">
+                    {new Date(user.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                
+                <div className="pt-4 border-t border-white/10">
+                  <button 
+                    onClick={() => window.location.href = '/profile'}
+                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 px-4 rounded-xl text-sm font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                  >
+                    Manage Account
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
     </div>
   );
 };
