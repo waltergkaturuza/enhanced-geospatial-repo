@@ -64,23 +64,23 @@ const AdminDashboard = () => (
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-lg font-medium mb-2">User Management</h3>
         <p className="text-gray-600 text-sm mb-4">Manage user accounts and permissions</p>
-        <a href="/admin/roles" className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
+        <Link to="/admin/roles" className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
           Manage Roles →
-        </a>
+        </Link>
       </div>
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-lg font-medium mb-2">User Approvals</h3>
         <p className="text-gray-600 text-sm mb-4">Review and approve pending user accounts</p>
-        <a href="/admin/approvals" className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
+        <Link to="/admin/approvals" className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
           Approve Users →
-        </a>
+        </Link>
       </div>
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-lg font-medium mb-2">System Management</h3>
         <p className="text-gray-600 text-sm mb-4">System configuration and monitoring</p>
-        <a href="/admin/system" className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
+        <Link to="/admin/system" className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
           System Settings →
-        </a>
+        </Link>
       </div>
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-lg font-medium mb-2">Analytics</h3>

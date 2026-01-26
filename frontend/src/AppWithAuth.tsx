@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { MainNavigation } from './components/MainNavigation';
@@ -53,9 +53,9 @@ const AdminDashboard = () => (
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-lg font-medium mb-2">User Management</h3>
         <p className="text-gray-600 text-sm mb-4">Manage user accounts and permissions</p>
-        <a href="/admin/roles" className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
+        <Link to="/admin/roles" className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
           Manage Roles →
-        </a>
+        </Link>
       </div>
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-lg font-medium mb-2">System Health</h3>
@@ -83,18 +83,18 @@ const LandingPage = () => (
           Powerful geospatial data analysis and visualization tools
         </p>
         <div className="mt-8 space-x-4">
-          <a
-            href="/signup"
+          <Link
+            to="/signup"
             className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
           >
             Get Started
-          </a>
-          <a
-            href="/login"
+          </Link>
+          <Link
+            to="/login"
             className="inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
           >
             Sign In
-          </a>
+          </Link>
         </div>
       </div>
       
