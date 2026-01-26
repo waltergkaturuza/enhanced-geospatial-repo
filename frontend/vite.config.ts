@@ -13,11 +13,18 @@ export default defineConfig({
     },
     outDir: 'dist',
     assetsDir: 'assets',
+    // Ensure public files are copied
+    copyPublicDir: true,
   },
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
     },
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+  },
+  // Configure for SPA routing
+  preview: {
+    port: 5173,
+    strictPort: true,
   },
 })
