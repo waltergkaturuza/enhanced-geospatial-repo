@@ -10,6 +10,7 @@ import { Eye, EyeOff, Lock, User as UserIcon, AlertCircle, Loader2 } from 'lucid
  * error handling, and loading states.
  */
 export const Login: React.FC = () => {
+  console.log('Login component rendered');
   const navigate = useNavigate();
   const { login, isLoading, error } = useAuthContext();
   

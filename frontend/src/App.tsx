@@ -149,6 +149,9 @@ const LandingPage = () => (
  * and the overall application structure with React Query integration.
  */
 function App() {
+  console.log('App component loaded');
+  console.log('Current location:', window.location.href);
+  
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
