@@ -71,16 +71,6 @@ const AuditLogs: React.FC = () => {
       setIsLoading(false);
     }
   };
-          timestamp: new Date(Date.now() - 7200000).toLocaleString(),
-          status: 'error',
-        },
-      ]);
-    } catch (error) {
-      console.error('Error fetching audit logs:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const filteredLogs = logs.filter(log => {
     const matchesSearch = 
