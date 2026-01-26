@@ -1015,6 +1015,120 @@ def update_user_role(request):
         }, status=500)
 
 @csrf_exempt
+@require_http_methods(["GET", "POST"])
+def emergency_fix_columns(request):
+    """
+    TEMPORARY EMERGENCY ENDPOINT
+    
+    Manually adds UserProfile columns using raw SQL.
+    Visit this URL in your browser to fix the "column does not exist" errors.
+    
+    Usage: GET https://your-site.com/api/admin/emergency-fix-columns/
+    """
+    try:
+        # Check if user is admin or superuser (only for GET, allow POST for emergency)
+        if request.method == 'GET':
+            if not request.user.is_authenticated or not (request.user.is_superuser or request.user.is_staff):
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Admin access required. Login to /admin/ first, then visit this URL.'
+                }, status=403)
+        
+        from django.db import connection
+        
+        logger.info("=" * 60)
+        logger.info("EMERGENCY FIX: Adding UserProfile columns")
+        logger.info("=" * 60)
+        
+        results = []
+        
+        sql_commands = [
+            ('organization', "ALTER TABLE imagery_userprofile ADD COLUMN IF NOT EXISTS organization VARCHAR(255) DEFAULT '' NOT NULL"),
+            ('organization_type', "ALTER TABLE imagery_userprofile ADD COLUMN IF NOT EXISTS organization_type VARCHAR(100) DEFAULT '' NOT NULL"),
+            ('intended_use', "ALTER TABLE imagery_userprofile ADD COLUMN IF NOT EXISTS intended_use VARCHAR(100) DEFAULT '' NOT NULL"),
+            ('intended_use_details', "ALTER TABLE imagery_userprofile ADD COLUMN IF NOT EXISTS intended_use_details TEXT DEFAULT '' NOT NULL"),
+            ('country', "ALTER TABLE imagery_userprofile ADD COLUMN IF NOT EXISTS country VARCHAR(100) DEFAULT 'Zimbabwe' NOT NULL"),
+            ('user_path', "ALTER TABLE imagery_userprofile ADD COLUMN IF NOT EXISTS user_path VARCHAR(50) DEFAULT 'individual' NOT NULL"),
+            ('approval_status', "ALTER TABLE imagery_userprofile ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) DEFAULT 'pending' NOT NULL"),
+            ('approved_at', "ALTER TABLE imagery_userprofile ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP NULL"),
+            ('approved_by_id', "ALTER TABLE imagery_userprofile ADD COLUMN IF NOT EXISTS approved_by_id INTEGER NULL"),
+            ('rejection_reason', "ALTER TABLE imagery_userprofile ADD COLUMN IF NOT EXISTS rejection_reason TEXT DEFAULT '' NOT NULL"),
+        ]
+        
+        with connection.cursor() as cursor:
+            for column_name, sql in sql_commands:
+                try:
+                    logger.info(f"Adding column: {column_name}")
+                    cursor.execute(sql)
+                    results.append({
+                        'column': column_name,
+                        'status': 'added',
+                        'message': 'Column added successfully or already exists'
+                    })
+                    logger.info(f"✓ {column_name} - OK")
+                except Exception as e:
+                    error_msg = str(e)
+                    if 'already exists' in error_msg or 'duplicate column' in error_msg:
+                        results.append({
+                            'column': column_name,
+                            'status': 'exists',
+                            'message': 'Column already exists'
+                        })
+                        logger.info(f"✓ {column_name} - Already exists")
+                    else:
+                        results.append({
+                            'column': column_name,
+                            'status': 'error',
+                            'message': error_msg
+                        })
+                        logger.error(f"✗ {column_name} - Error: {error_msg}")
+        
+        # Try to add foreign key constraint
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    ALTER TABLE imagery_userprofile 
+                    ADD CONSTRAINT IF NOT EXISTS imagery_userprofile_approved_by_id_fkey 
+                    FOREIGN KEY (approved_by_id) REFERENCES auth_user(id) ON DELETE SET NULL
+                """)
+                results.append({
+                    'column': 'approved_by_id_fkey',
+                    'status': 'added',
+                    'message': 'Foreign key constraint added'
+                })
+        except Exception as e:
+            logger.warning(f"Could not add foreign key: {str(e)}")
+            results.append({
+                'column': 'approved_by_id_fkey',
+                'status': 'skipped',
+                'message': f'FK constraint skipped: {str(e)}'
+            })
+        
+        logger.info("=" * 60)
+        logger.info("EMERGENCY FIX COMPLETED")
+        logger.info("=" * 60)
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Emergency column fix completed! Refresh your admin page.',
+            'results': results,
+            'next_steps': [
+                'Refresh the admin page (/admin/auth/user/)',
+                'Try signing up a new user',
+                'All API endpoints should now work',
+                'You can delete this endpoint after confirming everything works'
+            ]
+        })
+        
+    except Exception as e:
+        logger.error(f"Emergency fix error: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Emergency fix failed: {str(e)}',
+            'help': 'Check server logs for details'
+        }, status=500)
+
+@csrf_exempt
 @require_http_methods(["GET"])
 def dashboard_stats(request):
     """Get dashboard statistics for the authenticated user"""

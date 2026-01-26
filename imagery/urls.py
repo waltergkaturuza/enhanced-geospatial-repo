@@ -55,6 +55,9 @@ urlpatterns = [
     path('admin/approve-user/', views_simple.approve_user, name='admin-approve-user'),
     path('admin/reject-user/', views_simple.reject_user, name='admin-reject-user'),
     
+    # TEMPORARY: Emergency migration fix endpoint (visit in browser to fix columns)
+    path('admin/emergency-fix-columns/', views_simple.emergency_fix_columns, name='admin-emergency-fix'),
+    
     # User management endpoints
     path('admin/users/', views_simple.admin_users, name='admin-users'),
     path('admin/users/update-role/', views_simple.update_user_role, name='admin-update-user-role'),
