@@ -27,25 +27,27 @@ const DatabaseManagement: React.FC = () => {
       const apiBaseUrl = getApiBaseUrl();
       const headers = getAuthHeaders();
       
-      // Fetch system status which includes database info
-      const statusResponse = await fetch(`${apiBaseUrl}/system/status/`, { headers });
-      if (statusResponse.ok) {
-        const statusData = await statusResponse.json();
-        if (statusData.success && statusData.data) {
-          const data = statusData.data;
+      // Fetch database stats from dedicated endpoint
+      const statsResponse = await fetch(`${apiBaseUrl}/admin/database-stats/`, { headers });
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json();
+        if (statsData.success && statsData.data) {
+          const data = statsData.data;
           setStats({
-            totalSize: data.storage_total || 100,
-            usedSize: data.storage_used || 0,
-            tableCount: 8, // Could be enhanced with actual table count
-            connectionCount: data.services?.find((s: any) => s.name === 'PostgreSQL Database')?.details?.match(/\d+/)?.[0] || 0,
-            queryTime: data.db_response_time || 0,
+            totalSize: data.total_size_gb || 100,
+            usedSize: data.database_size_gb || 0,
+            tableCount: data.tables?.length || 0,
+            connectionCount: data.connection_count || 0,
+            queryTime: data.avg_query_time_ms || 0,
           });
           
-          // Update tables if we have service info
-          if (data.services) {
-            // Could enhance this with actual table data from backend
+          // Update tables with real data
+          if (data.tables && data.tables.length > 0) {
+            setTables(data.tables);
           }
         }
+      } else {
+        console.error('Failed to fetch database stats:', statsResponse.status);
       }
     } catch (error) {
       console.error('Error fetching database stats:', error);

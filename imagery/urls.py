@@ -61,4 +61,7 @@ urlpatterns = [
     # User management endpoints
     path('admin/users/', views_simple.admin_users, name='admin-users'),
     path('admin/users/update-role/', views_simple.update_user_role, name='admin-update-user-role'),
+    
+    # Database management endpoints
+    path('admin/database-stats/', views_simple.database_stats, name='admin-database-stats'),
 ]

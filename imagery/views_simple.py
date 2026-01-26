@@ -863,8 +863,8 @@ def admin_users(request):
         
         from django.contrib.auth.models import User
         
-        # Get all users
-        users = User.objects.all().select_related('profile').order_by('-date_joined')
+        # Get all users WITHOUT select_related to avoid UserProfile errors
+        users = User.objects.all().order_by('-date_joined')
         
         # Transform to frontend format
         users_data = []
@@ -877,8 +877,13 @@ def admin_users(request):
             # Django doesn't track last login by default, so we'll use date_joined as fallback
             last_login = user.last_login.isoformat() if user.last_login else None
             
-            # Get organization if available
-            organization = getattr(user, 'organization', '') or ''
+            # Get organization if available (handle missing profile gracefully)
+            organization = ''
+            try:
+                if hasattr(user, 'profile'):
+                    organization = getattr(user.profile, 'organization', '') or ''
+            except Exception:
+                pass
             
             # Determine modules based on role
             if is_superuser:
@@ -1126,6 +1131,92 @@ def emergency_fix_columns(request):
             'success': False,
             'message': f'Emergency fix failed: {str(e)}',
             'help': 'Check server logs for details'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def database_stats(request):
+    """Get real database statistics"""
+    try:
+        if not request.user.is_authenticated:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        from django.db import connection
+        from django.contrib.auth.models import User
+        
+        # Get table statistics from database
+        with connection.cursor() as cursor:
+            # Get database size
+            cursor.execute("""
+                SELECT pg_database_size(current_database()) / (1024.0 * 1024.0 * 1024.0) as size_gb
+            """)
+            db_size_result = cursor.fetchone()
+            db_size_gb = float(db_size_result[0]) if db_size_result else 0.0
+            
+            # Get table information
+            cursor.execute("""
+                SELECT 
+                    schemaname,
+                    tablename,
+                    pg_total_relation_size(schemaname||'.'||tablename) / (1024.0 * 1024.0) as size_mb,
+                    n_tup_ins + n_tup_upd + n_tup_del as row_count
+                FROM pg_stat_user_tables
+                WHERE schemaname = 'public'
+                ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
+                LIMIT 20
+            """)
+            
+            tables_data = []
+            for row in cursor.fetchall():
+                schema, table_name, size_mb, row_count = row
+                
+                # Format size
+                if size_mb < 1:
+                    size_display = f"{size_mb * 1024:.1f} KB"
+                elif size_mb >= 1024:
+                    size_display = f"{size_mb / 1024:.2f} GB"
+                else:
+                    size_display = f"{size_mb:.1f} MB"
+                
+                tables_data.append({
+                    'name': table_name,
+                    'rows': int(row_count) if row_count else 0,
+                    'size': size_display,
+                    'size_mb': float(size_mb)
+                })
+            
+            # Get connection count
+            cursor.execute("""
+                SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()
+            """)
+            connection_count = cursor.fetchone()[0]
+            
+            # Get query time (simple test)
+            start = timezone.now()
+            cursor.execute("SELECT COUNT(*) FROM auth_user")
+            user_count = cursor.fetchone()[0]
+            query_time_ms = int((timezone.now() - start).total_seconds() * 1000)
+        
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'database_size_gb': round(db_size_gb, 2),
+                'total_size_gb': 100.0,  # Your plan limit
+                'tables': tables_data,
+                'connection_count': connection_count,
+                'avg_query_time_ms': query_time_ms,
+                'total_users': user_count
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching database stats: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error fetching database stats: {str(e)}'
         }, status=500)
 
 @csrf_exempt
