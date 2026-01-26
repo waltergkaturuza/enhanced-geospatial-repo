@@ -189,132 +189,221 @@ export const Dashboard: React.FC = () => {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      {/* Approval Status Banner */}
-      <ApprovalStatusBanner />
-      
-      {/* Welcome Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Welcome back, {user.firstName}!
-        </h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Here's what's happening with your geospatial data today.
-        </p>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat) => (
-          <div key={stat.title} className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-6">
-              <div className="flex items-center">
-                <div className={`flex-shrink-0 ${stat.bgColor} rounded-md p-3`}>
-                  <stat.icon className={`h-6 w-6 ${stat.color}`} />
-                </div>
-                <div className="ml-4">
-                  <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                  <div className="text-sm text-gray-600">{stat.title}</div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="max-w-screen-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        {/* Approval Status Banner */}
+        <ApprovalStatusBanner />
+        
+        {/* Welcome Header with Futuristic Design */}
+        <div className="mb-10 relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-purple-600/10 rounded-2xl blur-3xl"></div>
+          <div className="relative backdrop-blur-sm bg-white/60 rounded-2xl p-8 border border-white/20 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  Welcome back, {user.firstName}!
+                </h1>
+                <p className="mt-2 text-base text-gray-600 flex items-center">
+                  <Activity className="h-4 w-4 mr-2 text-blue-500" />
+                  Here's what's happening with your geospatial data today.
+                </p>
+              </div>
+              <div className="hidden lg:flex items-center space-x-4">
+                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                  {user.firstName.charAt(0)}
                 </div>
               </div>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Module Access Cards */}
-        <div className="lg:col-span-2">
-          <h2 className="text-lg font-medium text-gray-900 mb-6">Available Modules</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {moduleCards.map((module) => (
+        {/* Stats Grid - Futuristic Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          {stats.map((stat, index) => (
+            <div 
+              key={stat.title} 
+              className="group relative bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-gray-100/50 hover:border-blue-200"
+              style={{ animationDelay: `${index * 100}ms` }}
+            >
+              {/* Animated gradient background */}
+              <div className="absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-100 transition-opacity duration-300" 
+                   style={{ background: `linear-gradient(135deg, ${stat.color.replace('text-', 'rgba(').replace('-600', ', 0.05)')} 0%, transparent 100%)` }}>
+              </div>
+              
+              <div className="relative p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`${stat.bgColor} rounded-lg p-3 group-hover:scale-110 transition-transform duration-300`}>
+                    <stat.icon className={`h-7 w-7 ${stat.color}`} />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-3xl font-bold bg-gradient-to-br from-gray-900 to-gray-600 bg-clip-text text-transparent">
+                      {stat.value}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-sm font-medium text-gray-600">{stat.title}</div>
+                
+                {/* Subtle bottom accent */}
+                <div className={`absolute bottom-0 left-0 right-0 h-1 ${stat.bgColor} opacity-50 group-hover:opacity-100 transition-opacity`}></div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+        {/* Module Access Cards - Wider Layout */}
+        <div className="xl:col-span-3">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+              <div className="h-8 w-1 bg-gradient-to-b from-blue-600 to-purple-600 rounded-full mr-4"></div>
+              Available Modules
+            </h2>
+            <div className="text-sm text-gray-500">
+              {moduleCards.filter(m => m.hasAccess).length} of {moduleCards.length} modules available
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            {moduleCards.map((module, index) => (
               <div
                 key={module.title}
-                className={`relative bg-white rounded-lg shadow-md overflow-hidden transition-transform duration-200 hover:scale-105 ${
+                className={`group relative rounded-2xl overflow-hidden transition-all duration-500 transform hover:-translate-y-2 ${
                   module.hasAccess 
-                    ? 'cursor-pointer hover:shadow-lg' 
+                    ? 'cursor-pointer hover:shadow-2xl' 
                     : 'opacity-50 cursor-not-allowed'
                 }`}
+                style={{ animationDelay: `${index * 50}ms` }}
                 onClick={() => {
                   if (module.hasAccess) {
                     window.location.href = module.href;
                   }
                 }}
               >
-                <div className={`h-32 bg-gradient-to-br ${module.color} p-6 text-white`}>
-                  <module.icon className="h-8 w-8 mb-3" />
-                  <h3 className="text-lg font-semibold">{module.title}</h3>
-                </div>
-                <div className="p-6">
-                  <p className="text-sm text-gray-600 mb-4">
-                    {module.description}
-                  </p>
-                  {module.hasAccess ? (
-                    <div className="flex items-center text-sm font-medium text-indigo-600">
-                      Access Available
-                      <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                      </svg>
+                {/* Glowing border effect */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${module.color} opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-xl`}></div>
+                
+                <div className="relative bg-white rounded-2xl border border-gray-200/50 group-hover:border-transparent transition-all duration-300 h-full">
+                  {/* Icon Header with Gradient */}
+                  <div className={`relative h-36 bg-gradient-to-br ${module.color} p-6 overflow-hidden`}>
+                    {/* Animated background pattern */}
+                    <div className="absolute inset-0 opacity-10">
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.8),transparent_50%)]"></div>
                     </div>
-                  ) : (
-                    <div className="flex items-center text-sm font-medium text-gray-400">
-                      Upgrade Required
+                    
+                    <div className="relative z-10">
+                      <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 w-fit mb-3 group-hover:scale-110 transition-transform duration-300">
+                        <module.icon className="h-7 w-7 text-white drop-shadow-lg" />
+                      </div>
+                      <h3 className="text-lg font-bold text-white drop-shadow-md">{module.title}</h3>
                     </div>
-                  )}
+                    
+                    {/* Decorative corner element */}
+                    <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/10 group-hover:scale-150 transition-transform duration-500"></div>
+                  </div>
+                  
+                  {/* Content */}
+                  <div className="p-5">
+                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                      {module.description}
+                    </p>
+                    
+                    {module.hasAccess ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-green-600 flex items-center">
+                          <div className="h-2 w-2 rounded-full bg-green-500 mr-2 animate-pulse"></div>
+                          Active
+                        </span>
+                        <svg className="h-5 w-5 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="flex items-center text-xs font-medium text-gray-400">
+                        <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        Upgrade Required
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Sidebar */}
+        {/* Sidebar - Modern Design */}
         <div className="space-y-6">
           {/* Recent Activity */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900 flex items-center">
-                <Activity className="h-5 w-5 mr-2" />
+          <div className="relative bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+            {/* Decorative element */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl"></div>
+            
+            <div className="relative px-6 py-4 border-b border-gray-200/50 bg-white/50 backdrop-blur-sm">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg p-2 mr-3">
+                  <Activity className="h-4 w-4 text-white" />
+                </div>
                 Recent Activity
               </h3>
             </div>
-            <div className="divide-y divide-gray-200">
-              {recentActivity.map((activity) => (
-                <div key={activity.id} className="px-6 py-4">
+            
+            <div className="divide-y divide-gray-100">
+              {recentActivity.map((activity, index) => (
+                <div 
+                  key={activity.id} 
+                  className="px-6 py-4 hover:bg-blue-50/50 transition-colors duration-200 cursor-pointer group"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0">
-                      <activity.icon className="h-5 w-5 text-gray-400" />
+                      <div className="bg-gray-100 group-hover:bg-blue-100 rounded-lg p-2 transition-colors">
+                        <activity.icon className="h-4 w-4 text-gray-600 group-hover:text-blue-600 transition-colors" />
+                      </div>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900">{activity.title}</p>
-                      <p className="text-xs text-gray-500">{activity.timestamp}</p>
+                      <p className="text-sm text-gray-900 font-medium group-hover:text-blue-900">{activity.title}</p>
+                      <p className="text-xs text-gray-500 mt-1">{activity.timestamp}</p>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="px-6 py-3 bg-gray-50">
-              <button className="text-sm text-indigo-600 hover:text-indigo-500 font-medium">
+            
+            <div className="px-6 py-3 bg-gradient-to-r from-blue-50/50 to-purple-50/50 backdrop-blur-sm">
+              <button className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center group">
                 View all activity
+                <svg className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
               </button>
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Quick Actions</h3>
+          {/* Quick Actions - Modern Design */}
+          <div className="relative bg-gradient-to-br from-white to-blue-50/30 rounded-2xl shadow-lg border border-gray-200/50 overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-full blur-3xl"></div>
+            
+            <div className="relative px-6 py-4 border-b border-gray-200/50 bg-white/50 backdrop-blur-sm">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg p-2 mr-3">
+                  <Settings className="h-4 w-4 text-white" />
+                </div>
+                Quick Actions
+              </h3>
             </div>
-            <div className="px-6 py-4 space-y-3">
+            
+            <div className="px-6 py-4 space-y-2">
               {hasModuleAccess('imagery') && (
                 <button 
                   onClick={() => window.location.href = '/imagery'}
-                  className="w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                  className="w-full group flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium text-gray-700 bg-gradient-to-r from-white to-blue-50 hover:from-blue-50 hover:to-blue-100 border border-gray-200/50 hover:border-blue-300 transition-all duration-300 shadow-sm hover:shadow-md"
                 >
                   <span className="flex items-center">
-                    <Globe className="h-4 w-4 mr-2" />
+                    <Globe className="h-4 w-4 mr-3 text-blue-600" />
                     Search Imagery
                   </span>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-4 w-4 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
@@ -323,13 +412,13 @@ export const Dashboard: React.FC = () => {
               {hasModuleAccess('imagery') && (
                 <button 
                   onClick={() => window.location.href = '/files'}
-                  className="w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                  className="w-full group flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium text-gray-700 bg-gradient-to-r from-white to-teal-50 hover:from-teal-50 hover:to-teal-100 border border-gray-200/50 hover:border-teal-300 transition-all duration-300 shadow-sm hover:shadow-md"
                 >
                   <span className="flex items-center">
-                    <Upload className="h-4 w-4 mr-2" />
+                    <Upload className="h-4 w-4 mr-3 text-teal-600" />
                     Upload Images
                   </span>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-4 w-4 text-gray-400 group-hover:text-teal-600 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
@@ -338,13 +427,13 @@ export const Dashboard: React.FC = () => {
               {hasModuleAccess('analytics') && (
                 <button 
                   onClick={() => window.location.href = '/analytics'}
-                  className="w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                  className="w-full group flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium text-gray-700 bg-gradient-to-r from-white to-purple-50 hover:from-purple-50 hover:to-purple-100 border border-gray-200/50 hover:border-purple-300 transition-all duration-300 shadow-sm hover:shadow-md"
                 >
                   <span className="flex items-center">
-                    <BarChart3 className="h-4 w-4 mr-2" />
+                    <BarChart3 className="h-4 w-4 mr-3 text-purple-600" />
                     Run Analysis
                   </span>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-4 w-4 text-gray-400 group-hover:text-purple-600 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
@@ -353,25 +442,28 @@ export const Dashboard: React.FC = () => {
               {hasModuleAccess('analytics') && (
                 <button 
                   onClick={() => window.location.href = '/analytics?tab=process'}
-                  className="w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                  className="w-full group flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium text-gray-700 bg-gradient-to-r from-white to-indigo-50 hover:from-indigo-50 hover:to-indigo-100 border border-gray-200/50 hover:border-indigo-300 transition-all duration-300 shadow-sm hover:shadow-md"
                 >
                   <span className="flex items-center">
-                    <Settings className="h-4 w-4 mr-2" />
+                    <Settings className="h-4 w-4 mr-3 text-indigo-600" />
                     Process Images
                   </span>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-4 w-4 text-gray-400 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
               )}
               
               {hasModuleAccess('business') && (
-                <button className="w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                <button 
+                  onClick={() => window.location.href = '/store'}
+                  className="w-full group flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium text-gray-700 bg-gradient-to-r from-white to-green-50 hover:from-green-50 hover:to-green-100 border border-gray-200/50 hover:border-green-300 transition-all duration-300 shadow-sm hover:shadow-md"
+                >
                   <span className="flex items-center">
-                    <ShoppingCart className="h-4 w-4 mr-2" />
+                    <ShoppingCart className="h-4 w-4 mr-3 text-green-600" />
                     Browse Store
                   </span>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-4 w-4 text-gray-400 group-hover:text-green-600 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
@@ -379,32 +471,46 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Account Summary */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Account Summary</h3>
+          {/* Account Summary - Premium Card */}
+          <div className="relative bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+            {/* Animated gradient background */}
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-purple-600/20 to-pink-600/20 animate-pulse"></div>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(120,119,198,0.3),transparent_50%)]"></div>
+            
+            <div className="relative px-6 py-4 border-b border-white/10">
+              <h3 className="text-lg font-bold text-white flex items-center">
+                <Users className="h-5 w-5 mr-2 text-blue-400" />
+                Account Summary
+              </h3>
             </div>
-            <div className="px-6 py-4 space-y-4">
+            
+            <div className="relative px-6 py-5 space-y-4">
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">Subscription:</span>
-                <span className="font-medium text-gray-900 capitalize">
+                <span className="text-gray-300">Subscription:</span>
+                <span className="font-bold text-white capitalize px-3 py-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full text-xs">
                   {user.subscriptionPlan}
                 </span>
               </div>
+              
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">Role:</span>
-                <span className="font-medium text-gray-900 capitalize">
+                <span className="text-gray-300">Role:</span>
+                <span className="font-semibold text-white capitalize">
                   {user.role.replace('_', ' ')}
                 </span>
               </div>
+              
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">Member Since:</span>
-                <span className="font-medium text-gray-900">
+                <span className="text-gray-300">Member Since:</span>
+                <span className="font-semibold text-white">
                   {new Date(user.createdAt).toLocaleDateString()}
                 </span>
               </div>
-              <div className="pt-3 border-t border-gray-200">
-                <button className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-indigo-700">
+              
+              <div className="pt-4 border-t border-white/10">
+                <button 
+                  onClick={() => window.location.href = '/profile'}
+                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 px-4 rounded-xl text-sm font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                >
                   Manage Account
                 </button>
               </div>
@@ -412,6 +518,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 };
