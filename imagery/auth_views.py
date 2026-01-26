@@ -50,6 +50,20 @@ def login_view(request):
             # Login user
             django_login(request, user)
             
+            # Determine role and subscription based on superuser status
+            is_superuser = user.is_superuser or user.is_staff
+            user_role = 'admin' if is_superuser else 'user'
+            subscription_plan = 'enterprise' if is_superuser else 'free'
+            
+            # All modules for superusers, limited for regular users
+            if is_superuser:
+                user_modules = [
+                    'dashboard', 'imagery', 'analytics', 'business', 
+                    'admin', 'upload', 'files', 'store'
+                ]
+            else:
+                user_modules = ['dashboard', 'imagery', 'upload']
+            
             return JsonResponse({
                 'success': True,
                 'message': 'Login successful',
@@ -60,12 +74,13 @@ def login_view(request):
                     'firstName': user.first_name,
                     'lastName': user.last_name,
                     'organization': getattr(user, 'organization', ''),
-                    'role': 'user',  # Default role
-                    'subscriptionPlan': 'free',  # Default plan
+                    'role': user_role,
+                    'subscriptionPlan': subscription_plan,
                     'isActive': user.is_active,
+                    'isSuperuser': is_superuser,  # Add superuser flag
                     'emailVerified': True,  # Assume verified for now
                     'createdAt': user.date_joined.isoformat(),
-                    'modules': ['dashboard', 'imagery', 'upload']
+                    'modules': user_modules
                 }
             })
         else:
@@ -181,19 +196,36 @@ def user_profile(request):
             'message': 'Authentication required'
         }, status=401)
     
+    user = request.user
+    
+    # Determine role and subscription based on superuser status
+    is_superuser = user.is_superuser or user.is_staff
+    user_role = 'admin' if is_superuser else 'user'
+    subscription_plan = 'enterprise' if is_superuser else 'free'
+    
+    # All modules for superusers, limited for regular users
+    if is_superuser:
+        user_modules = [
+            'dashboard', 'imagery', 'analytics', 'business', 
+            'admin', 'upload', 'files', 'store'
+        ]
+    else:
+        user_modules = ['dashboard', 'imagery', 'upload']
+    
     return JsonResponse({
         'success': True,
         'user': {
-            'id': request.user.id,
-            'email': request.user.email,
-            'firstName': request.user.first_name,
-            'lastName': request.user.last_name,
-            'organization': getattr(request.user, 'organization', ''),
-            'role': 'user',
-            'subscriptionPlan': 'free',
-            'isActive': request.user.is_active,
+            'id': user.id,
+            'email': user.email,
+            'firstName': user.first_name,
+            'lastName': user.last_name,
+            'organization': getattr(user, 'organization', ''),
+            'role': user_role,
+            'subscriptionPlan': subscription_plan,
+            'isActive': user.is_active,
+            'isSuperuser': is_superuser,  # Add superuser flag
             'emailVerified': True,
-            'createdAt': request.user.date_joined.isoformat(),
-            'modules': ['dashboard', 'imagery', 'upload']
+            'createdAt': user.date_joined.isoformat(),
+            'modules': user_modules
         }
     })

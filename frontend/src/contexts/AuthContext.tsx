@@ -76,6 +76,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
 
         // Transform backend user data to frontend format
+        const isSuperuser = response.user.isSuperuser || response.user.role === 'admin' || response.user.role === 'super_admin';
         const user: SimpleUser = {
           id: response.user.id,
           email: response.user.email,
@@ -83,15 +84,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           lastName: response.user.lastName,
           organization: response.user.organization,
           role: response.user.role,
-          subscriptionPlan: response.user.subscriptionPlan,
+          subscriptionPlan: isSuperuser ? 'enterprise' : (response.user.subscriptionPlan || 'free'),
           isActive: response.user.isActive,
           emailVerified: response.user.emailVerified,
           isApproved: true, // Backend doesn't provide this yet, default to true for existing users
           approvalStatus: 'approved', // Backend doesn't provide this yet, default to approved
           createdAt: response.user.createdAt,
           lastLoginAt: new Date().toISOString(), // Set current time as last login
-          modules: response.user.modules || ['dashboard']
+          modules: isSuperuser 
+            ? ['dashboard', 'imagery', 'analytics', 'business', 'admin', 'upload', 'files', 'store']
+            : (response.user.modules || ['dashboard'])
         };
+        
+        // Store superuser flag for easy access
+        (user as any).isSuperuser = isSuperuser;
 
         console.log('Setting user in context:', user);
         setUser(user);
@@ -213,12 +219,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Permission checking functions
   const hasPermission = useCallback((permission: string): boolean => {
-    console.log('hasPermission called:', { permission, user: user?.role, hasUser: !!user });
+    console.log('hasPermission called:', { permission, user: user?.role, hasUser: !!user, isSuperuser: (user as any)?.isSuperuser });
     if (!user) return false;
     
-    // Admin users have all permissions
-    if (user.role === 'admin') {
-      console.log('Admin user detected, granting permission:', permission);
+    // Superusers and admin users have all permissions
+    const isSuperuser = (user as any)?.isSuperuser || user.role === 'admin' || user.role === 'super_admin';
+    if (isSuperuser) {
+      console.log('Superuser/Admin user detected, granting permission:', permission);
       return true;
     }
     
@@ -249,8 +256,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const hasModuleAccess = useCallback((moduleId: string): boolean => {
     if (!user) return false;
     
-    // Admin users have access to all modules
-    if (user.role === 'admin') return true;
+    // Superusers and admin users have access to all modules
+    const isSuperuser = (user as any)?.isSuperuser || user.role === 'admin' || user.role === 'super_admin';
+    if (isSuperuser) {
+      console.log('Superuser/Admin user detected, granting module access:', moduleId);
+      return true;
+    }
     
     // Check if user has explicit access to the module
     return user.modules.includes(moduleId);

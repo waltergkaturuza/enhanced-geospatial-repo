@@ -229,10 +229,15 @@ export const Dashboard: React.FC = () => {
       icon: Users,
       href: '/admin',
       hasAccess: (() => {
+        // Superusers always have access
+        const isSuperuser = (user as any)?.isSuperuser || user.role === 'admin' || user.role === 'super_admin';
+        if (isSuperuser) return true;
+        
         const adminAccess = hasPermission('admin_access');
         const manageUsers = hasPermission('manage_users');
         console.log('System Management Access Check:', {
           user: user,
+          isSuperuser,
           adminAccess,
           manageUsers,
           finalAccess: adminAccess || manageUsers
@@ -560,12 +565,14 @@ export const Dashboard: React.FC = () => {
               </div>
               
               <div className="relative px-6 py-5 space-y-4">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-300">Subscription:</span>
-                  <span className="font-bold text-white capitalize px-3 py-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full text-xs">
-                    {user.subscriptionPlan}
-                  </span>
-                </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-300">Subscription:</span>
+                <span className="font-bold text-white capitalize px-3 py-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full text-xs">
+                  {(user as any)?.isSuperuser || user.role === 'admin' || user.role === 'super_admin' 
+                    ? 'Enterprise (Superuser)' 
+                    : user.subscriptionPlan}
+                </span>
+              </div>
                 
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-300">Role:</span>
