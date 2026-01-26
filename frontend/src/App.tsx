@@ -9,6 +9,7 @@ import Login from './components/auth/Login';
 import Signup from './components/auth/Signup';
 import ForgotPassword from './components/auth/ForgotPassword';
 import UserProfile from './components/auth/UserProfile';
+import UserProfileManagement from './components/auth/UserProfileManagement';
 
 // Main Components
 import Dashboard from './components/Dashboard';
@@ -23,7 +24,7 @@ import RoleManagement from './components/admin/RoleManagement';
 import { UserApproval } from './components/admin/UserApproval';
 
 // System Components
-import SystemManagementClean from './components/SystemManagementClean';
+import SystemManagement from './components/system/SystemManagement';
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -229,8 +230,7 @@ function App() {
                 path="/profile"
                 element={
                   <ProtectedRoute>
-                    <MainNavigation />
-                    <UserProfile />
+                    <UserProfileManagement />
                   </ProtectedRoute>
                 }
               />
@@ -292,8 +292,7 @@ function App() {
                     requiredPermissions={['admin_access']}
                     requiredModules={['admin']}
                   >
-                    <MainNavigation />
-                    <SystemManagementClean />
+                    <SystemManagement />
                   </ProtectedRoute>
                 }
               />
