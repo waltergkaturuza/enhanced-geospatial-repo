@@ -54,4 +54,8 @@ urlpatterns = [
     path('admin/pending-users/', views_simple.pending_users, name='admin-pending-users'),
     path('admin/approve-user/', views_simple.approve_user, name='admin-approve-user'),
     path('admin/reject-user/', views_simple.reject_user, name='admin-reject-user'),
+    
+    # User management endpoints
+    path('admin/users/', views_simple.admin_users, name='admin-users'),
+    path('admin/users/update-role/', views_simple.update_user_role, name='admin-update-user-role'),
 ]

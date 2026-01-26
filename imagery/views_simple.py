@@ -510,6 +510,177 @@ def reject_user(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+def admin_users(request):
+    """Get all users for admin/role management"""
+    try:
+        if not request.user.is_authenticated:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        # Check if user is admin or superuser
+        if not (request.user.is_superuser or request.user.is_staff):
+            return JsonResponse({
+                'success': False,
+                'message': 'Admin access required'
+            }, status=403)
+        
+        from django.contrib.auth.models import User
+        
+        # Get all users
+        users = User.objects.all().select_related('profile').order_by('-date_joined')
+        
+        # Transform to frontend format
+        users_data = []
+        for user in users:
+            is_superuser = user.is_superuser or user.is_staff
+            user_role = 'admin' if is_superuser else 'user'
+            subscription_plan = 'enterprise' if is_superuser else 'free'
+            
+            # Get user's last login from session (if available)
+            # Django doesn't track last login by default, so we'll use date_joined as fallback
+            last_login = user.last_login.isoformat() if user.last_login else None
+            
+            # Get organization if available
+            organization = getattr(user, 'organization', '') or ''
+            
+            # Determine modules based on role
+            if is_superuser:
+                user_modules = ['dashboard', 'imagery', 'analytics', 'business', 'admin', 'upload', 'files', 'store']
+            else:
+                user_modules = ['dashboard', 'imagery', 'upload']
+            
+            users_data.append({
+                'id': str(user.id),
+                'email': user.email,
+                'firstName': user.first_name,
+                'lastName': user.last_name,
+                'organization': organization,
+                'role': user_role,
+                'subscriptionPlan': subscription_plan,
+                'isActive': user.is_active,
+                'isSuperuser': is_superuser,
+                'emailVerified': True,  # Assume verified for existing users
+                'isApproved': True,  # Assume approved for existing users
+                'approvalStatus': 'approved',
+                'createdAt': user.date_joined.isoformat(),
+                'lastLoginAt': last_login,
+                'modules': user_modules
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'users': users_data,
+                'count': len(users_data)
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching users: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error fetching users: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_user_role(request):
+    """Update user role and status"""
+    try:
+        if not request.user.is_authenticated:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        # Check if user is admin or superuser
+        if not (request.user.is_superuser or request.user.is_staff):
+            return JsonResponse({
+                'success': False,
+                'message': 'Admin access required'
+            }, status=403)
+        
+        data = json.loads(request.body)
+        user_id = data.get('userId') or data.get('user_id')
+        new_role = data.get('role')
+        is_active = data.get('isActive')
+        
+        if not user_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'User ID is required'
+            }, status=400)
+        
+        from django.contrib.auth.models import User, Group
+        
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'User not found'
+            }, status=404)
+        
+        # Prevent modifying superusers (unless current user is also superuser)
+        if target_user.is_superuser and not request.user.is_superuser:
+            return JsonResponse({
+                'success': False,
+                'message': 'Cannot modify superuser accounts'
+            }, status=403)
+        
+        # Update active status
+        if is_active is not None:
+            target_user.is_active = is_active
+            target_user.save()
+        
+        # Update role by managing groups
+        if new_role:
+            # Clear existing groups
+            target_user.groups.clear()
+            
+            # Add user to appropriate group based on role
+            if new_role == 'admin':
+                admin_group, created = Group.objects.get_or_create(name='Admin')
+                target_user.groups.add(admin_group)
+                target_user.is_staff = True
+                target_user.save()
+            elif new_role == 'user':
+                user_group, created = Group.objects.get_or_create(name='User')
+                target_user.groups.add(user_group)
+                target_user.is_staff = False
+                target_user.save()
+            elif new_role == 'viewer':
+                viewer_group, created = Group.objects.get_or_create(name='Viewer')
+                target_user.groups.add(viewer_group)
+                target_user.is_staff = False
+                target_user.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'User updated successfully',
+            'data': {
+                'userId': str(target_user.id),
+                'role': new_role or target_user.groups.first().name if target_user.groups.exists() else 'user',
+                'isActive': target_user.is_active
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error updating user role: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error updating user role: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
 def dashboard_stats(request):
     """Get dashboard statistics for the authenticated user"""
     try:

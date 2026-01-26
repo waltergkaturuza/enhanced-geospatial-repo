@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthContext } from '../../contexts/AuthContext';
+import { getApiBaseUrl, getAuthHeaders } from '../../lib/api';
 import { 
   Users, 
   Shield, 
@@ -38,83 +39,55 @@ export const RoleManagement: React.FC = () => {
   const canManageRoles = hasPermission('manage_users') || hasPermission('admin_access');
 
   useEffect(() => {
-    // Mock API call to fetch users
+    // Fetch users from backend API
     const fetchUsers = async () => {
       setIsLoading(true);
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock user data
-      const mockUsers: User[] = [
-        {
-          id: '1',
-          email: 'admin@company.com',
-          firstName: 'John',
-          lastName: 'Admin',
-          organization: 'Geospatial Corp',
-          role: 'admin',
-          subscriptionPlan: 'enterprise',
-          isActive: true,
-          emailVerified: true,
-          isApproved: true,
-          approvalStatus: 'approved',
-          createdAt: '2023-01-15T10:00:00Z',
-          lastLoginAt: '2024-01-15T14:30:00Z',
-          modules: ['imagery', 'analytics', 'business', 'admin']
-        },
-        {
-          id: '2',
-          email: 'analyst@company.com',
-          firstName: 'Jane',
-          lastName: 'Smith',
-          organization: 'Data Analytics Inc',
-          role: 'analyst',
-          subscriptionPlan: 'professional',
-          isActive: true,
-          emailVerified: true,
-          isApproved: true,
-          approvalStatus: 'approved',
-          createdAt: '2023-02-20T09:15:00Z',
-          lastLoginAt: '2024-01-14T16:45:00Z',
-          modules: ['imagery', 'analytics']
-        },
-        {
-          id: '3',
-          email: 'business@company.com',
-          firstName: 'Mike',
-          lastName: 'Johnson',
-          organization: 'Business Solutions Ltd',
-          role: 'business_user',
-          subscriptionPlan: 'basic',
-          isActive: false,
-          emailVerified: true,
-          isApproved: true,
-          approvalStatus: 'approved',
-          createdAt: '2023-03-10T11:30:00Z',
-          lastLoginAt: '2024-01-10T13:20:00Z',
-          modules: ['business']
-        },
-        {
-          id: '4',
-          email: 'researcher@university.edu',
-          firstName: 'Sarah',
-          lastName: 'Wilson',
-          organization: 'Research University',
-          role: 'researcher',
-          subscriptionPlan: 'academic',
-          isActive: true,
-          emailVerified: false,
-          isApproved: false,
-          approvalStatus: 'pending',
-          createdAt: '2023-04-05T08:45:00Z',
-          lastLoginAt: '2024-01-13T10:15:00Z',
-          modules: ['imagery']
+      try {
+        const apiBaseUrl = getApiBaseUrl();
+        const headers = getAuthHeaders();
+
+        const response = await fetch(`${apiBaseUrl}/admin/users/`, { headers });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data && data.data.users) {
+            // Transform backend user data to frontend format
+            const transformedUsers: User[] = data.data.users.map((user: any) => ({
+              id: user.id,
+              email: user.email,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              organization: user.organization || '',
+              role: user.role,
+              subscriptionPlan: user.subscriptionPlan,
+              isActive: user.isActive,
+              emailVerified: user.emailVerified !== undefined ? user.emailVerified : true,
+              isApproved: user.isApproved !== undefined ? user.isApproved : true,
+              approvalStatus: user.approvalStatus || 'approved',
+              createdAt: user.createdAt,
+              lastLoginAt: user.lastLoginAt || null,
+              modules: user.modules || ['dashboard']
+            }));
+            
+            setUsers(transformedUsers);
+            setFilteredUsers(transformedUsers);
+          } else {
+            console.error('Failed to fetch users:', data.message);
+            setUsers([]);
+            setFilteredUsers([]);
+          }
+        } else {
+          console.error('Error fetching users:', response.statusText);
+          setUsers([]);
+          setFilteredUsers([]);
         }
-      ];
-      
-      setUsers(mockUsers);
-      setFilteredUsers(mockUsers);
-      setIsLoading(false);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        setUsers([]);
+        setFilteredUsers([]);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     fetchUsers();
@@ -164,22 +137,95 @@ export const RoleManagement: React.FC = () => {
   };
 
   const handleUpdateUser = async (updatedUser: Partial<User>) => {
-    // Mock API call to update user
-    setUsers(prev => prev.map(u => 
-      u.id === selectedUser?.id ? { ...u, ...updatedUser } : u
-    ));
-    setShowEditModal(false);
-    setSelectedUser(null);
+    if (!selectedUser) return;
+    
+    try {
+      const apiBaseUrl = getApiBaseUrl();
+      const headers = getAuthHeaders();
+
+      const response = await fetch(`${apiBaseUrl}/admin/users/update-role/`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          userId: selectedUser.id,
+          role: updatedUser.role,
+          isActive: updatedUser.isActive
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Update local state
+          setUsers(prev => prev.map(u => 
+            u.id === selectedUser.id ? { ...u, ...updatedUser } : u
+          ));
+          setShowEditModal(false);
+          setSelectedUser(null);
+          
+          // Refresh filtered users
+          setFilteredUsers(prev => prev.map(u => 
+            u.id === selectedUser.id ? { ...u, ...updatedUser } : u
+          ));
+        } else {
+          console.error('Failed to update user:', data.message);
+          alert('Failed to update user: ' + data.message);
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('Error updating user:', errorData.message);
+        alert('Error updating user: ' + (errorData.message || response.statusText));
+      }
+    } catch (error) {
+      console.error('Error updating user:', error);
+      alert('Error updating user. Please try again.');
+    }
   };
 
   const handleToggleUserStatus = async (userId: string) => {
-    setUsers(prev => prev.map(u => 
-      u.id === userId ? { ...u, isActive: !u.isActive } : u
-    ));
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    
+    try {
+      const apiBaseUrl = getApiBaseUrl();
+      const headers = getAuthHeaders();
+
+      const response = await fetch(`${apiBaseUrl}/admin/users/update-role/`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          userId: userId,
+          isActive: !user.isActive
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Update local state
+          setUsers(prev => prev.map(u => 
+            u.id === userId ? { ...u, isActive: !u.isActive } : u
+          ));
+          setFilteredUsers(prev => prev.map(u => 
+            u.id === userId ? { ...u, isActive: !u.isActive } : u
+          ));
+        } else {
+          console.error('Failed to toggle user status:', data.message);
+          alert('Failed to update user status: ' + data.message);
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('Error toggling user status:', errorData.message);
+        alert('Error updating user status: ' + (errorData.message || response.statusText));
+      }
+    } catch (error) {
+      console.error('Error toggling user status:', error);
+      alert('Error updating user status. Please try again.');
+    }
   };
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div className="max-w-screen-2xl mx-auto py-8" style={{ paddingLeft: '10mm', paddingRight: '10mm' }}>
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
@@ -320,7 +366,7 @@ export const RoleManagement: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                        {USER_ROLES[user.role].name}
+                        {USER_ROLES[user.role]?.name || user.role}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
