@@ -25,29 +25,52 @@ const AuditLogs: React.FC = () => {
   const fetchLogs = async () => {
     setIsLoading(true);
     try {
-      // Mock data - replace with actual API call
-      setLogs([
-        {
-          id: 'e5eb3c1e-30cd-4966-928e-9b9a15b8e0f5',
-          action: 'LOGIN SUCCESS',
-          user: 'user@example.com',
-          ipAddress: '41.174.184.62',
-          timestamp: new Date().toLocaleString(),
-          status: 'success',
-        },
-        {
-          id: 'a1b2c3d4-5678-90ef-ghij-klmnopqrstuv',
-          action: 'FILE_UPLOAD',
-          user: 'admin@example.com',
-          ipAddress: '192.168.1.100',
-          timestamp: new Date(Date.now() - 3600000).toLocaleString(),
-          status: 'success',
-        },
-        {
-          id: 'b2c3d4e5-6789-01fg-hijk-lmnopqrstuvw',
-          action: 'LOGIN_FAILED',
-          user: 'unknown@example.com',
-          ipAddress: '10.0.0.1',
+      const apiBaseUrl = getApiBaseUrl();
+      const headers = getAuthHeaders();
+
+      // Fetch system status which includes security events
+      const statusResponse = await fetch(`${apiBaseUrl}/system/status/`, { headers });
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        if (statusData.success && statusData.data && statusData.data.security_events) {
+          // Transform security events to audit logs format
+          const transformedLogs = statusData.data.security_events.map((event: any) => ({
+            id: event.id || '',
+            action: event.action || event.type || 'UNKNOWN',
+            user: 'system', // Could be enhanced to fetch user info
+            ipAddress: event.ipAddress || 'N/A',
+            timestamp: event.timestamp ? new Date(event.timestamp).toLocaleString() : new Date().toLocaleString(),
+            status: event.status || 'success',
+            details: event.type || ''
+          }));
+          setLogs(transformedLogs);
+        } else {
+          // Fallback: create logs from system alerts if available
+          if (statusData.data && statusData.data.alerts) {
+            const alertLogs = statusData.data.alerts.map((alert: any) => ({
+              id: alert.id || '',
+              action: alert.title || 'SYSTEM_ALERT',
+              user: 'system',
+              ipAddress: 'N/A',
+              timestamp: alert.timestamp ? new Date(alert.timestamp).toLocaleString() : new Date().toLocaleString(),
+              status: alert.level || 'success',
+              details: alert.message || ''
+            }));
+            setLogs(alertLogs);
+          } else {
+            setLogs([]);
+          }
+        }
+      } else {
+        setLogs([]);
+      }
+    } catch (error) {
+      console.error('Error fetching audit logs:', error);
+      setLogs([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
           timestamp: new Date(Date.now() - 7200000).toLocaleString(),
           status: 'error',
         },
@@ -91,7 +114,7 @@ const AuditLogs: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6" style={{ paddingLeft: '10mm', paddingRight: '10mm' }}>
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-900 flex items-center">

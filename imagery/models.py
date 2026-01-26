@@ -54,6 +54,35 @@ class UserProfile(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile'
     )
+    
+    # Organization details (for access request system)
+    organization = models.CharField(max_length=255, blank=True, default='')
+    organization_type = models.CharField(max_length=100, blank=True, default='', help_text='Type of organization (e.g., local_council, university, etc.)')
+    intended_use = models.CharField(max_length=100, blank=True, default='', help_text='Primary intended use of the platform')
+    intended_use_details = models.TextField(blank=True, default='', help_text='Additional details about intended use')
+    country = models.CharField(max_length=100, blank=True, default='Zimbabwe')
+    user_path = models.CharField(max_length=50, blank=True, default='individual', help_text='User type path: government, organization, education, individual')
+    
+    # Approval status
+    approval_status = models.CharField(
+        max_length=20, 
+        default='pending', 
+        choices=[
+            ('pending', 'Pending Review'),
+            ('approved', 'Approved'),
+            ('rejected', 'Rejected')
+        ]
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='approved_users'
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True, default='')
+    
     # Quota settings
     max_aois = models.IntegerField(default=10)
     max_download_size_gb = models.FloatField(default=50.0)

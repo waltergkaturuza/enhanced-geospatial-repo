@@ -531,65 +531,69 @@ def user_profile(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 def pending_users(request):
-    """Get list of users pending approval"""
+    """Get list of users pending approval with detailed application information"""
     try:
+        if not request.user.is_authenticated:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        # Check if user is admin or superuser
+        if not (request.user.is_superuser or request.user.is_staff):
+            return JsonResponse({
+                'success': False,
+                'message': 'Admin access required'
+            }, status=403)
+        
         logger.info("Fetching pending users")
         
-        # Mock pending users data
-        pending_users_data = [
-            {
-                'id': '5',
-                'email': 'john.doe@company.com',
-                'firstName': 'John',
-                'lastName': 'Doe',
-                'organization': 'Tech Solutions Inc',
-                'role': 'pending_user',
-                'subscriptionPlan': 'free_pending',
-                'isActive': True,
-                'emailVerified': True,
-                'isApproved': False,
-                'approvalStatus': 'pending',
-                'createdAt': '2024-01-16T09:00:00Z',
-                'modules': ['dashboard', 'data_store']
-            },
-            {
-                'id': '6',
-                'email': 'sarah.wilson@research.edu',
-                'firstName': 'Sarah',
-                'lastName': 'Wilson',
-                'organization': 'University Research Lab',
-                'role': 'pending_user',
-                'subscriptionPlan': 'free_pending',
-                'isActive': True,
-                'emailVerified': True,
-                'isApproved': False,
-                'approvalStatus': 'pending',
-                'createdAt': '2024-01-15T14:30:00Z',
-                'modules': ['dashboard', 'data_store']
-            },
-            {
-                'id': '7',
-                'email': 'mike.johnson@startup.io',
-                'firstName': 'Mike',
-                'lastName': 'Johnson',
-                'organization': 'GeoStartup',
-                'role': 'pending_user',
-                'subscriptionPlan': 'free_pending',
-                'isActive': True,
-                'emailVerified': False,
-                'isApproved': False,
-                'approvalStatus': 'pending',
-                'createdAt': '2024-01-14T11:15:00Z',
-                'modules': ['dashboard', 'data_store']
-            }
-        ]
+        from django.contrib.auth.models import User
+        
+        # Get users with pending approval status in their profile
+        pending_users_list = []
+        
+        # Get all users and check their profiles
+        users = User.objects.all().select_related('profile').order_by('-date_joined')
+        
+        for user in users:
+            try:
+                profile = user.profile
+                
+                # Check if user is pending approval
+                if profile.approval_status == 'pending':
+                    # Extract email domain for trust assessment
+                    email_domain = user.email.split('@')[1] if '@' in user.email else ''
+                    
+                    pending_users_list.append({
+                        'id': str(user.id),
+                        'email': user.email,
+                        'emailDomain': email_domain,
+                        'firstName': user.first_name,
+                        'lastName': user.last_name,
+                        'organization': profile.organization or '',
+                        'organizationType': profile.organization_type or '',
+                        'intendedUse': profile.intended_use or '',
+                        'intendedUseDetails': profile.intended_use_details or '',
+                        'country': profile.country or 'Zimbabwe',
+                        'userPath': profile.user_path or 'individual',
+                        'role': 'pending_user',
+                        'subscriptionPlan': 'free_pending',
+                        'isActive': user.is_active,
+                        'emailVerified': True,
+                        'isApproved': False,
+                        'approvalStatus': 'pending',
+                        'createdAt': user.date_joined.isoformat(),
+                        'modules': ['dashboard', 'data_store']
+                    })
+            except Exception as e:
+                logger.warning(f"Could not get profile for user {user.id}: {str(e)}")
+                continue
         
         return JsonResponse({
             'success': True,
-            'data': {
-                'users': pending_users_data,
-                'count': len(pending_users_data)
-            }
+            'results': pending_users_list,  # Frontend expects 'results'
+            'count': len(pending_users_list)
         })
         
     except Exception as e:
@@ -602,27 +606,133 @@ def pending_users(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def approve_user(request):
-    """Approve a pending user"""
+    """
+    Approve a pending user and assign appropriate role and subscription.
+    
+    Admin assigns:
+    - Role (viewer, researcher, analyst, business_user, etc.)
+    - Subscription plan (free, professional, enterprise)
+    - Data access level
+    - Storage/compute quotas
+    """
     try:
+        if not request.user.is_authenticated:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        # Check if user is admin or superuser
+        if not (request.user.is_superuser or request.user.is_staff):
+            return JsonResponse({
+                'success': False,
+                'message': 'Admin access required'
+            }, status=403)
+        
         data = json.loads(request.body)
-        user_id = data.get('user_id')
-        admin_id = data.get('admin_id', 'admin_001')
+        user_id = data.get('user_id') or data.get('userId')
+        assigned_role = data.get('role', 'viewer')  # Default to viewer
+        assigned_subscription = data.get('subscription_plan', 'free')  # Default to free
+        assigned_quotas = data.get('quotas', {})
+        notes = data.get('notes', '')
         
-        logger.info(f"Approving user {user_id} by admin {admin_id}")
+        if not user_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'User ID is required'
+            }, status=400)
         
-        # Mock approval process
+        logger.info(f"Admin {request.user.username} approving user {user_id} with role {assigned_role}")
+        
+        from django.contrib.auth.models import User, Group
+        from django.utils import timezone
+        
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'User not found'
+            }, status=404)
+        
+        # Get or create user profile
+        from .models import UserProfile
+        profile, created = UserProfile.objects.get_or_create(user=target_user)
+        
+        # Check if user is already approved
+        if profile.approval_status == 'approved':
+            return JsonResponse({
+                'success': False,
+                'message': 'User is already approved'
+            }, status=400)
+        
+        # Update approval status
+        profile.approval_status = 'approved'
+        profile.approved_by = request.user
+        profile.approved_at = timezone.now()
+        
+        # Assign quotas based on role and subscription
+        if assigned_subscription == 'free':
+            profile.max_aois = assigned_quotas.get('max_aois', 10)
+            profile.max_download_size_gb = assigned_quotas.get('max_download_size_gb', 50.0)
+            profile.max_concurrent_downloads = assigned_quotas.get('max_concurrent_downloads', 3)
+        elif assigned_subscription == 'professional':
+            profile.max_aois = assigned_quotas.get('max_aois', 50)
+            profile.max_download_size_gb = assigned_quotas.get('max_download_size_gb', 500.0)
+            profile.max_concurrent_downloads = assigned_quotas.get('max_concurrent_downloads', 10)
+        elif assigned_subscription == 'enterprise':
+            profile.max_aois = assigned_quotas.get('max_aois', 999)
+            profile.max_download_size_gb = assigned_quotas.get('max_download_size_gb', 5000.0)
+            profile.max_concurrent_downloads = assigned_quotas.get('max_concurrent_downloads', 50)
+        
+        profile.save()
+        
+        # Assign user to appropriate group based on role
+        target_user.groups.clear()
+        
+        role_group_mapping = {
+            'viewer': 'User',
+            'researcher': 'Researcher',
+            'analyst': 'Analyst',
+            'business_user': 'Business User',
+            'admin': 'Admin'
+        }
+        
+        group_name = role_group_mapping.get(assigned_role, 'User')
+        user_group, _ = Group.objects.get_or_create(name=group_name)
+        target_user.groups.add(user_group)
+        
+        # If admin role, also make them staff
+        if assigned_role == 'admin':
+            target_user.is_staff = True
+            target_user.save()
+        
+        logger.info(f"User {target_user.email} approved successfully:")
+        logger.info(f"  - Role: {assigned_role}")
+        logger.info(f"  - Subscription: {assigned_subscription}")
+        logger.info(f"  - Max AOIs: {profile.max_aois}")
+        logger.info(f"  - Max Download: {profile.max_download_size_gb} GB")
+        
+        # TODO: Send approval email notification
+        # send_approval_email(target_user, assigned_role, assigned_subscription)
+        
         approval_result = {
             'user_id': user_id,
             'status': 'approved',
-            'approved_by': admin_id,
-            'approved_at': '2024-01-16T15:30:00Z',
-            'new_role': 'viewer',  # Default role after approval
-            'new_subscription_plan': 'free'
+            'approved_by': request.user.username,
+            'approved_at': profile.approved_at.isoformat(),
+            'assigned_role': assigned_role,
+            'assigned_subscription': assigned_subscription,
+            'quotas': {
+                'max_aois': profile.max_aois,
+                'max_download_size_gb': profile.max_download_size_gb,
+                'max_concurrent_downloads': profile.max_concurrent_downloads
+            }
         }
         
         return JsonResponse({
             'success': True,
-            'message': 'User approved successfully',
+            'message': f'User {target_user.first_name} {target_user.last_name} approved successfully with {assigned_role} role',
             'data': approval_result
         })
         
@@ -636,27 +746,86 @@ def approve_user(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def reject_user(request):
-    """Reject a pending user"""
+    """
+    Reject a pending user with a reason.
+    
+    User account remains but cannot access data until re-applied.
+    """
     try:
+        if not request.user.is_authenticated:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        # Check if user is admin or superuser
+        if not (request.user.is_superuser or request.user.is_staff):
+            return JsonResponse({
+                'success': False,
+                'message': 'Admin access required'
+            }, status=403)
+        
         data = json.loads(request.body)
-        user_id = data.get('user_id')
-        admin_id = data.get('admin_id', 'admin_001')
+        user_id = data.get('user_id') or data.get('userId')
         rejection_reason = data.get('reason', 'No reason provided')
         
-        logger.info(f"Rejecting user {user_id} by admin {admin_id}, reason: {rejection_reason}")
+        if not user_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'User ID is required'
+            }, status=400)
         
-        # Mock rejection process
+        if not rejection_reason or rejection_reason.strip() == '':
+            return JsonResponse({
+                'success': False,
+                'message': 'Rejection reason is required'
+            }, status=400)
+        
+        logger.info(f"Admin {request.user.username} rejecting user {user_id}, reason: {rejection_reason}")
+        
+        from django.contrib.auth.models import User
+        from django.utils import timezone
+        
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'User not found'
+            }, status=404)
+        
+        # Get or create user profile
+        from .models import UserProfile
+        profile, created = UserProfile.objects.get_or_create(user=target_user)
+        
+        # Update rejection status
+        profile.approval_status = 'rejected'
+        profile.rejection_reason = rejection_reason
+        profile.approved_by = request.user  # Track who rejected
+        profile.approved_at = timezone.now()  # Track when rejected
+        profile.save()
+        
+        # Optionally deactivate the user account
+        # target_user.is_active = False
+        # target_user.save()
+        
+        logger.info(f"User {target_user.email} rejected successfully")
+        logger.info(f"  - Reason: {rejection_reason}")
+        
+        # TODO: Send rejection email notification
+        # send_rejection_email(target_user, rejection_reason)
+        
         rejection_result = {
             'user_id': user_id,
             'status': 'rejected',
-            'rejected_by': admin_id,
-            'rejected_at': '2024-01-16T15:30:00Z',
+            'rejected_by': request.user.username,
+            'rejected_at': timezone.now().isoformat(),
             'rejection_reason': rejection_reason
         }
         
         return JsonResponse({
             'success': True,
-            'message': 'User rejected successfully',
+            'message': f'User {target_user.first_name} {target_user.last_name} rejected',
             'data': rejection_result
         })
         

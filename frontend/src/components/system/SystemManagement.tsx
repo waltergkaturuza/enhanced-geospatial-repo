@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   BarChart3, 
   Users, 
@@ -8,7 +8,9 @@ import {
   FileText, 
   Key, 
   Database, 
-  Server 
+  Server,
+  ArrowLeft,
+  Home
 } from 'lucide-react';
 import AdminDashboard from './AdminDashboard';
 import UserManagement from './UserManagement';
@@ -40,6 +42,7 @@ const navItems: NavItem[] = [
 
 const SystemManagement: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<SystemTab>('dashboard');
 
   // Detect URL path and set appropriate tab
@@ -94,6 +97,17 @@ const SystemManagement: React.FC = () => {
                 <p className="text-xs text-gray-500">System Admin</p>
               </div>
             </div>
+          </div>
+          
+          {/* Back to Main Menu Button */}
+          <div className="p-4 border-b border-gray-200">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 hover:shadow-lg"
+            >
+              <ArrowLeft className="h-5 w-5" />
+              <span className="text-sm">Back to Main Menu</span>
+            </button>
           </div>
           
           <nav className="p-4 space-y-2">

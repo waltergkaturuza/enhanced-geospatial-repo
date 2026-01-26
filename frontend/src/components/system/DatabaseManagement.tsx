@@ -27,21 +27,33 @@ const DatabaseManagement: React.FC = () => {
       const apiBaseUrl = getApiBaseUrl();
       const headers = getAuthHeaders();
       
-      // Mock data - replace with actual API call
-      setStats({
-        totalSize: 100,
-        usedSize: 2.4,
-        tableCount: 8,
-        connectionCount: 8,
-        queryTime: 122,
-      });
+      // Fetch system status which includes database info
+      const statusResponse = await fetch(`${apiBaseUrl}/system/status/`, { headers });
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        if (statusData.success && statusData.data) {
+          const data = statusData.data;
+          setStats({
+            totalSize: data.storage_total || 100,
+            usedSize: data.storage_used || 0,
+            tableCount: 8, // Could be enhanced with actual table count
+            connectionCount: data.services?.find((s: any) => s.name === 'PostgreSQL Database')?.details?.match(/\d+/)?.[0] || 0,
+            queryTime: data.db_response_time || 0,
+          });
+          
+          // Update tables if we have service info
+          if (data.services) {
+            // Could enhance this with actual table data from backend
+          }
+        }
+      }
     } catch (error) {
       console.error('Error fetching database stats:', error);
     }
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6" style={{ paddingLeft: '10mm', paddingRight: '10mm' }}>
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-900 flex items-center">

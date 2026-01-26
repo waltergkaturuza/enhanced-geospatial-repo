@@ -106,7 +106,10 @@ def login_view(request):
 @permission_classes([AllowAny])
 def signup_view(request):
     """
-    Handle user registration
+    Handle user access request (approval-based registration)
+    
+    SECURITY: Role and subscription are NEVER accepted from frontend.
+    All new users are created as pending_user and must be approved by admin.
     """
     try:
         data = json.loads(request.body)
@@ -115,6 +118,23 @@ def signup_view(request):
         password = data.get('password')
         first_name = data.get('firstName', '')
         last_name = data.get('lastName', '')
+        organization = data.get('organization', '')
+        
+        # New fields for access request
+        organization_type = data.get('organizationType', '')
+        intended_use = data.get('intendedUse', '')
+        intended_use_details = data.get('intendedUseDetails', '')
+        country = data.get('country', 'Zimbabwe')
+        user_path = data.get('userPath', 'individual')
+        
+        # SECURITY: Ignore any role or subscription from frontend
+        # These will be assigned by admin after approval
+        frontend_role = data.get('role')  # Captured but ignored
+        frontend_subscription = data.get('subscriptionPlan')  # Captured but ignored
+        
+        if frontend_role and frontend_role in ['admin', 'super_admin']:
+            logger.warning(f"SECURITY ALERT: Attempted self-assignment of admin role by {email}")
+            # Continue but log the attempt
         
         if not email or not password:
             return JsonResponse({
@@ -126,26 +146,66 @@ def signup_view(request):
         if User.objects.filter(email=email).exists():
             return JsonResponse({
                 'success': False,
-                'message': 'User with this email already exists'
+                'message': 'An account with this email already exists. Please sign in or use a different email.'
             }, status=400)
         
-        # Create user
+        # Create user with pending status
+        # User is created but NOT active until admin approval
         user = User.objects.create_user(
             username=email,  # Use email as username
             email=email,
             password=password,
             first_name=first_name,
-            last_name=last_name
+            last_name=last_name,
+            is_active=True  # Allow login but with limited access
         )
+        
+        # Get or create user profile and store application details
+        try:
+            from .models import UserProfile
+            profile, created = UserProfile.objects.get_or_create(user=user)
+            
+            # Store application details in profile
+            profile.organization = organization
+            profile.organization_type = organization_type
+            profile.intended_use = intended_use
+            profile.intended_use_details = intended_use_details or ''
+            profile.country = country
+            profile.user_path = user_path
+            profile.approval_status = 'pending'
+            profile.save()
+            
+            logger.info(f"New access request from {email}:")
+            logger.info(f"  - Organization: {organization} ({organization_type})")
+            logger.info(f"  - Intended Use: {intended_use}")
+            logger.info(f"  - User Path: {user_path}")
+            logger.info(f"  - Country: {country}")
+            if intended_use_details:
+                logger.info(f"  - Details: {intended_use_details}")
+                
+        except Exception as e:
+            logger.warning(f"Could not create profile for {email}: {str(e)}")
+        
+        # Create authentication token
+        token, created = Token.objects.get_or_create(user=user)
         
         return JsonResponse({
             'success': True,
-            'message': 'Account created successfully',
+            'message': 'Access request submitted successfully! Your application will be reviewed within 1-2 business days.',
+            'token': token.key,
             'user': {
                 'id': user.id,
                 'email': user.email,
                 'firstName': user.first_name,
-                'lastName': user.last_name
+                'lastName': user.last_name,
+                'organization': organization,
+                'role': 'pending_user',  # Always pending - admin assigns real role
+                'subscriptionPlan': 'free_pending',  # Temporary plan
+                'isActive': True,
+                'isApproved': False,  # Requires admin approval
+                'approvalStatus': 'pending',
+                'modules': ['dashboard', 'data_store'],  # Limited access
+                'createdAt': user.date_joined.isoformat()
             }
         })
         
@@ -158,7 +218,7 @@ def signup_view(request):
         logger.error(f"Signup error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'message': 'Registration failed'
+            'message': 'Registration failed. Please try again.'
         }, status=500)
 
 @csrf_exempt

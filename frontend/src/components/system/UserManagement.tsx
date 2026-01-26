@@ -48,15 +48,30 @@ const UserManagement: React.FC = () => {
 
       // Fetch all users (if endpoint exists)
       const allUsersResponse = await fetch(`${apiBaseUrl}/admin/users/`, { headers }).catch(() => null);
-      const allUsersData = allUsersResponse?.ok ? await allUsersResponse.json() : { results: [] };
+      const allUsersData = allUsersResponse?.ok ? await allUsersResponse.json() : null;
 
-      // Combine and transform data
-      const allUsers = [
-        ...(pendingData.results || []),
-        ...(allUsersData.results || [])
-      ];
-
-      setUsers(allUsers);
+      // Use all users data if available, otherwise use pending users
+      if (allUsersData && allUsersData.success && allUsersData.data && allUsersData.data.users) {
+        // Transform backend user data to frontend format
+        const transformedUsers = allUsersData.data.users.map((user: any) => ({
+          id: parseInt(user.id) || 0,
+          email: user.email || '',
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          role: user.role || 'user',
+          isActive: user.isActive !== undefined ? user.isActive : true,
+          isApproved: user.isApproved !== undefined ? user.isApproved : true,
+          createdAt: user.createdAt || new Date().toISOString(),
+          lastLoginAt: user.lastLoginAt || undefined,
+          organization: user.organization || ''
+        }));
+        setUsers(transformedUsers);
+      } else if (pendingData.results && pendingData.results.length > 0) {
+        // Fallback to pending users if available
+        setUsers(pendingData.results);
+      } else {
+        setUsers([]);
+      }
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -121,7 +136,7 @@ const UserManagement: React.FC = () => {
   });
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6" style={{ paddingLeft: '10mm', paddingRight: '10mm' }}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

@@ -16,6 +16,14 @@ import {
 } from 'lucide-react';
 import type { SimpleUser as User } from '../../types/auth';
 
+interface PendingUserDetails extends User {
+  organizationType?: string;
+  intendedUse?: string;
+  intendedUseDetails?: string;
+  country?: string;
+  userPath?: string;
+}
+
 /**
  * UserApproval Component
  * 
@@ -25,82 +33,58 @@ import type { SimpleUser as User } from '../../types/auth';
 export const UserApproval: React.FC = () => {
   const { hasPermission } = useAuthContext();
   
-  // Mock data - in real app, this would come from API
-  const [pendingUsers, setPendingUsers] = useState<User[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [pendingUsers, setPendingUsers] = useState<PendingUserDetails[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<PendingUserDetails[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<PendingUserDetails | null>(null);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalAction, setApprovalAction] = useState<'approve' | 'reject'>('approve');
   const [rejectionReason, setRejectionReason] = useState('');
+  const [assignedRole, setAssignedRole] = useState('viewer');
+  const [assignedSubscription, setAssignedSubscription] = useState('free');
 
   // Check if user has permission to approve users
   const canApproveUsers = hasPermission('approve_users') || hasPermission('admin_access');
 
   useEffect(() => {
-    // Mock API call to fetch pending users
-    const fetchPendingUsers = async () => {
-      setIsLoading(true);
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock pending user data
-      const mockPendingUsers: User[] = [
-        {
-          id: '5',
-          email: 'john.doe@company.com',
-          firstName: 'John',
-          lastName: 'Doe',
-          organization: 'Tech Solutions Inc',
-          role: 'pending_user',
-          subscriptionPlan: 'free_pending',
-          isActive: true,
-          emailVerified: true,
-          isApproved: false,
-          approvalStatus: 'pending',
-          createdAt: '2024-01-16T09:00:00Z',
-          modules: ['dashboard', 'data_store']
-        },
-        {
-          id: '6',
-          email: 'sarah.wilson@research.edu',
-          firstName: 'Sarah',
-          lastName: 'Wilson',
-          organization: 'University Research Lab',
-          role: 'pending_user',
-          subscriptionPlan: 'free_pending',
-          isActive: true,
-          emailVerified: true,
-          isApproved: false,
-          approvalStatus: 'pending',
-          createdAt: '2024-01-15T14:30:00Z',
-          modules: ['dashboard', 'data_store']
-        },
-        {
-          id: '7',
-          email: 'mike.johnson@startup.io',
-          firstName: 'Mike',
-          lastName: 'Johnson',
-          organization: 'GeoStartup',
-          role: 'pending_user',
-          subscriptionPlan: 'free_pending',
-          isActive: true,
-          emailVerified: false,
-          isApproved: false,
-          approvalStatus: 'pending',
-          createdAt: '2024-01-14T11:15:00Z',
-          modules: ['dashboard', 'data_store']
-        }
-      ];
-      
-      setPendingUsers(mockPendingUsers);
-      setFilteredUsers(mockPendingUsers);
-      setIsLoading(false);
-    };
-
     fetchPendingUsers();
   }, []);
+
+  const fetchPendingUsers = async () => {
+    setIsLoading(true);
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`${apiBaseUrl}/admin/pending-users/`, {
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch pending users');
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.results) {
+        setPendingUsers(data.results);
+        setFilteredUsers(data.results);
+      } else {
+        setPendingUsers([]);
+        setFilteredUsers([]);
+      }
+    } catch (error) {
+      console.error('Error fetching pending users:', error);
+      setPendingUsers([]);
+      setFilteredUsers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Filter users based on search term
@@ -113,27 +97,133 @@ export const UserApproval: React.FC = () => {
     setFilteredUsers(filtered);
   }, [searchTerm, pendingUsers]);
 
-  const handleApprovalAction = (user: User, action: 'approve' | 'reject') => {
+  const handleApprovalAction = (user: PendingUserDetails, action: 'approve' | 'reject') => {
     setSelectedUser(user);
     setApprovalAction(action);
     setRejectionReason('');
+    
+    // Set default role based on organization type
+    if (action === 'approve') {
+      if (user.organizationType?.includes('university') || user.organizationType?.includes('school')) {
+        setAssignedRole('researcher');
+        setAssignedSubscription('free');
+      } else if (user.organizationType?.includes('government') || user.organizationType?.includes('council')) {
+        setAssignedRole('analyst');
+        setAssignedSubscription('professional');
+      } else if (user.organizationType?.includes('private') || user.organizationType?.includes('company')) {
+        setAssignedRole('business_user');
+        setAssignedSubscription('professional');
+      } else {
+        setAssignedRole('viewer');
+        setAssignedSubscription('free');
+      }
+    }
+    
     setShowApprovalModal(true);
+  };
+
+  const getOrganizationTypeLabel = (type?: string): string => {
+    const labels: Record<string, string> = {
+      'local_council': 'Local Council',
+      'provincial_government': 'Provincial Government',
+      'national_government': 'National Government',
+      'ministry': 'Ministry',
+      'private_company': 'Private Company',
+      'ngo': 'NGO',
+      'university': 'University',
+      'college': 'College',
+      'high_school': 'High School',
+      'independent_researcher': 'Independent Researcher',
+      'student': 'Student'
+    };
+    return labels[type || ''] || type || 'Not specified';
+  };
+
+  const getIntendedUseLabel = (use?: string): string => {
+    const labels: Record<string, string> = {
+      'research': 'Academic Research',
+      'planning': 'Urban/Regional Planning',
+      'policy': 'Policy Development',
+      'education': 'Education/Teaching',
+      'analysis': 'Commercial Analysis',
+      'monitoring': 'Environmental Monitoring',
+      'mapping': 'Mapping/Cartography',
+      'agriculture': 'Agriculture',
+      'disaster': 'Disaster Management'
+    };
+    return labels[use || ''] || use || 'Not specified';
   };
 
   const handleConfirmApproval = async () => {
     if (!selectedUser) return;
 
-    // Mock API call
-    console.log(`${approvalAction} user:`, selectedUser.id, rejectionReason);
-    
-    // Update user status
-    const updatedUsers = pendingUsers.filter(user => user.id !== selectedUser.id);
-    setPendingUsers(updatedUsers);
-    setFilteredUsers(updatedUsers);
-    
-    setShowApprovalModal(false);
-    setSelectedUser(null);
-    setRejectionReason('');
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+      const token = localStorage.getItem('token');
+
+      if (approvalAction === 'approve') {
+        // Approve user with assigned role and subscription
+        const response = await fetch(`${apiBaseUrl}/admin/approve-user/`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            user_id: selectedUser.id,
+            role: assignedRole,
+            subscription_plan: assignedSubscription
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to approve user');
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          // Refresh the pending users list
+          await fetchPendingUsers();
+        } else {
+          throw new Error(data.message || 'Approval failed');
+        }
+      } else {
+        // Reject user with reason
+        const response = await fetch(`${apiBaseUrl}/admin/reject-user/`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            user_id: selectedUser.id,
+            reason: rejectionReason
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to reject user');
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          // Refresh the pending users list
+          await fetchPendingUsers();
+        } else {
+          throw new Error(data.message || 'Rejection failed');
+        }
+      }
+
+      // Close modal and reset state
+      setShowApprovalModal(false);
+      setSelectedUser(null);
+      setRejectionReason('');
+      setAssignedRole('viewer');
+      setAssignedSubscription('free');
+    } catch (error) {
+      console.error(`Error ${approvalAction}ing user:`, error);
+      alert(`Failed to ${approvalAction} user. Please try again.`);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -248,6 +338,34 @@ export const UserApproval: React.FC = () => {
                           {formatDate(user.createdAt)}
                         </div>
                       </div>
+                      
+                      {/* Application Details */}
+                      <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2">
+                        {user.organizationType && (
+                          <div className="flex items-start">
+                            <span className="text-xs font-medium text-gray-700 mr-1">Type:</span>
+                            <span className="text-xs text-gray-600">{getOrganizationTypeLabel(user.organizationType)}</span>
+                          </div>
+                        )}
+                        {user.intendedUse && (
+                          <div className="flex items-start">
+                            <span className="text-xs font-medium text-gray-700 mr-1">Use:</span>
+                            <span className="text-xs text-gray-600">{getIntendedUseLabel(user.intendedUse)}</span>
+                          </div>
+                        )}
+                        {user.country && (
+                          <div className="flex items-start">
+                            <span className="text-xs font-medium text-gray-700 mr-1">Country:</span>
+                            <span className="text-xs text-gray-600">{user.country}</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {user.intendedUseDetails && (
+                        <div className="mt-2 text-xs text-gray-600 italic bg-gray-50 p-2 rounded">
+                          "{user.intendedUseDetails}"
+                        </div>
+                      )}
                     </div>
                   </div>
                   
@@ -289,22 +407,78 @@ export const UserApproval: React.FC = () => {
               </h3>
             </div>
             
-            <div className="mb-4">
-              <p className="text-sm text-gray-600">
+            <div className="mb-4 bg-gray-50 p-4 rounded-lg">
+              <p className="text-sm font-medium text-gray-900 mb-2">
                 {approvalAction === 'approve' 
                   ? `Approve ${selectedUser.firstName} ${selectedUser.lastName}?`
                   : `Reject ${selectedUser.firstName} ${selectedUser.lastName}?`
                 }
               </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {selectedUser.email} • {selectedUser.organization}
-              </p>
+              <div className="space-y-1 text-xs text-gray-600">
+                <p><span className="font-medium">Email:</span> {selectedUser.email}</p>
+                <p><span className="font-medium">Organization:</span> {selectedUser.organization}</p>
+                {selectedUser.organizationType && (
+                  <p><span className="font-medium">Type:</span> {getOrganizationTypeLabel(selectedUser.organizationType)}</p>
+                )}
+                {selectedUser.intendedUse && (
+                  <p><span className="font-medium">Intended Use:</span> {getIntendedUseLabel(selectedUser.intendedUse)}</p>
+                )}
+                {selectedUser.country && (
+                  <p><span className="font-medium">Country:</span> {selectedUser.country}</p>
+                )}
+                {selectedUser.intendedUseDetails && (
+                  <p className="italic mt-2 bg-white p-2 rounded border border-gray-200">
+                    "{selectedUser.intendedUseDetails}"
+                  </p>
+                )}
+              </div>
             </div>
+
+            {approvalAction === 'approve' && (
+              <div className="space-y-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Assign Role *
+                  </label>
+                  <select
+                    value={assignedRole}
+                    onChange={(e) => setAssignedRole(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="viewer">Viewer - Read-only access</option>
+                    <option value="researcher">Researcher - Data access + analysis</option>
+                    <option value="analyst">Analyst - Advanced analytics</option>
+                    <option value="business_user">Business User - Commercial access</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Role determines data access and feature availability
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Access Tier *
+                  </label>
+                  <select
+                    value={assignedSubscription}
+                    onChange={(e) => setAssignedSubscription(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="free">Educational/Trial Access (10 AOIs, 50GB)</option>
+                    <option value="professional">Government/Institutional Access (50 AOIs, 500GB)</option>
+                    <option value="enterprise">Commercial Access (Unlimited)</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Access tier determines storage quotas and download limits
+                  </p>
+                </div>
+              </div>
+            )}
 
             {approvalAction === 'reject' && (
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Rejection Reason
+                  Rejection Reason *
                 </label>
                 <div className="relative">
                   <MessageSquare className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
