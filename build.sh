@@ -53,6 +53,13 @@ python manage.py collectstatic --no-input
 
 # Run database migrations
 echo "Running database migrations..."
-python manage.py migrate
+python manage.py showmigrations
+echo "Applying migrations..."
+python manage.py migrate --no-input
+echo "Migrations completed!"
+
+# Show applied migrations
+echo "Current migration status:"
+python manage.py showmigrations
 
 echo "Build completed successfully!"
