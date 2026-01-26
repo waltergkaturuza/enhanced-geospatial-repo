@@ -17,6 +17,7 @@ import {
   Database
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getApiBaseUrl, getAuthHeaders } from '@/lib/api';
 import AdvancedUploadForm from './AdvancedUploadForm';
 import EnhancedUploadForm from './EnhancedUploadForm';
 
@@ -74,7 +75,15 @@ const ImageFileManager: React.FC<ImageFileManagerProps> = ({
     setError(null);
     
     try {
-      const response = await fetch('http://localhost:8000/api/files/tree/');
+      const apiBaseUrl = getApiBaseUrl();
+      const headers = getAuthHeaders();
+      
+      const response = await fetch(`${apiBaseUrl}/files/tree/`, { headers });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const result = await response.json();
       
       if (result.success) {
@@ -82,8 +91,8 @@ const ImageFileManager: React.FC<ImageFileManagerProps> = ({
       } else {
         setError(result.message || 'Failed to load files');
       }
-    } catch (err) {
-      setError('Failed to connect to server');
+    } catch (err: any) {
+      setError(`Failed to connect to server: ${err.message}`);
       console.error('Error fetching file tree:', err);
     } finally {
       setIsLoading(false);
@@ -104,7 +113,15 @@ const ImageFileManager: React.FC<ImageFileManagerProps> = ({
 
     setIsLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/files/search/?q=${encodeURIComponent(query)}`);
+      const apiBaseUrl = getApiBaseUrl();
+      const headers = getAuthHeaders();
+      
+      const response = await fetch(`${apiBaseUrl}/files/search/?q=${encodeURIComponent(query)}`, { headers });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const result = await response.json();
       
       if (result.success) {
@@ -129,8 +146,8 @@ const ImageFileManager: React.FC<ImageFileManagerProps> = ({
         }];
         setTreeData(searchTreeData);
       }
-    } catch (err) {
-      setError('Search failed');
+    } catch (err: any) {
+      setError(`Search failed: ${err.message}`);
       console.error('Error searching files:', err);
     } finally {
       setIsLoading(false);
@@ -188,8 +205,17 @@ const ImageFileManager: React.FC<ImageFileManagerProps> = ({
         formData.append('files', file);
       });
       
-      const response = await fetch('http://localhost:8000/api/upload/satellite-imagery/', {
+      const apiBaseUrl = getApiBaseUrl();
+      const token = localStorage.getItem('authToken');
+      const headers: HeadersInit = {};
+      
+      if (token) {
+        headers['Authorization'] = `Token ${token}`;
+      }
+      
+      const response = await fetch(`${apiBaseUrl}/upload/satellite-imagery/`, {
         method: 'POST',
+        headers,
         body: formData,
       });
       

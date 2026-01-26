@@ -12,6 +12,7 @@ import {
   Loader
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getApiBaseUrl } from '@/lib/api';
 
 interface UploadFile {
   id: string;
@@ -256,12 +257,21 @@ const AdvancedUploadForm: React.FC<AdvancedUploadFormProps> = ({
   // AI-powered metadata extraction
   const performAIExtraction = async (file: File): Promise<Partial<ExtractedMetadata>> => {
     try {
+      const apiBaseUrl = getApiBaseUrl();
+      const token = localStorage.getItem('authToken');
+      const headers: HeadersInit = {};
+      
+      if (token) {
+        headers['Authorization'] = `Token ${token}`;
+      }
+      
       // Send file to AI processing endpoint
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('http://localhost:8000/api/ai/extract-metadata/', {
+      const response = await fetch(`${apiBaseUrl}/ai/extract-metadata/`, {
         method: 'POST',
+        headers,
         body: formData
       });
 
@@ -349,8 +359,17 @@ const AdvancedUploadForm: React.FC<AdvancedUploadFormProps> = ({
         }));
       });
 
-      const response = await fetch('http://localhost:8000/api/upload/advanced-satellite-imagery/', {
+      const apiBaseUrl = getApiBaseUrl();
+      const token = localStorage.getItem('authToken');
+      const headers: HeadersInit = {};
+      
+      if (token) {
+        headers['Authorization'] = `Token ${token}`;
+      }
+      
+      const response = await fetch(`${apiBaseUrl}/upload/advanced-satellite-imagery/`, {
         method: 'POST',
+        headers,
         body: formData
       });
 

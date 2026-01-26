@@ -2,7 +2,7 @@ import axios from 'axios';
 import type { AxiosInstance, AxiosResponse } from 'axios';
 
 // API Configuration - automatically detect environment
-const getApiBaseUrl = (): string => {
+export const getApiBaseUrl = (): string => {
   // Check for explicit API URL configuration first (works in both dev and prod)
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
@@ -16,6 +16,20 @@ const getApiBaseUrl = (): string => {
   // In production, use the configured backend URL
   // Default to the backend Render service if not explicitly set
   return 'https://enhanced-geospatial-repo.onrender.com/api';
+};
+
+// Helper to get auth headers
+export const getAuthHeaders = (): HeadersInit => {
+  const token = localStorage.getItem('authToken');
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Token ${token}`;
+  }
+  
+  return headers;
 };
 
 const API_BASE_URL = getApiBaseUrl();

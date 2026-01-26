@@ -99,7 +99,7 @@ export const MainNavigation: React.FC = () => {
           <div className="flex">
             {/* Logo */}
             <div className="flex-shrink-0 flex items-center">
-              <Link to="/" className="flex items-center space-x-2">
+              <Link to={user ? "/dashboard" : "/"} className="flex items-center space-x-2">
                 <Globe className="h-8 w-8 text-indigo-600" />
                 <span className="text-xl font-bold text-gray-900">
                   GeoSpatial

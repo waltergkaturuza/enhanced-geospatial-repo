@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, File, X, CheckCircle, AlertTriangle, Clock, Satellite, Database, Globe, Plane } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getApiBaseUrl } from '@/lib/api';
 
 interface UploadedFile {
   id: string;
@@ -138,8 +139,17 @@ const UploadTab: React.FC<UploadTabProps> = ({
     }
     
     try {
-      const response = await fetch('http://localhost:8000/api/upload/satellite-imagery/', {
+      const apiBaseUrl = getApiBaseUrl();
+      const token = localStorage.getItem('authToken');
+      const headers: HeadersInit = {};
+      
+      if (token) {
+        headers['Authorization'] = `Token ${token}`;
+      }
+      
+      const response = await fetch(`${apiBaseUrl}/upload/satellite-imagery/`, {
         method: 'POST',
+        headers,
         body: formData,
       });
       
