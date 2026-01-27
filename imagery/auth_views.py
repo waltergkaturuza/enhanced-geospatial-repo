@@ -163,14 +163,14 @@ def signup_view(request):
             }, status=400)
         
         # Create user with pending status
-        # User is created but NOT active until admin approval
+        # User CANNOT login until admin approves
         user = User.objects.create_user(
             username=email,  # Use email as username
             email=email,
             password=password,
             first_name=first_name,
             last_name=last_name,
-            is_active=True  # Allow login but with limited access
+            is_active=False  # CANNOT login until approved by admin
         )
         
         # Get or create user profile and store application details
@@ -204,8 +204,8 @@ def signup_view(request):
         
         return JsonResponse({
             'success': True,
-            'message': 'Access request submitted successfully! Your application will be reviewed within 1-2 business days.',
-            'token': token.key,
+            'message': 'Access request submitted successfully! You will receive an email once your application is approved (typically within 1-2 business days). You can login after approval.',
+            'requiresApproval': True,
             'user': {
                 'id': user.id,
                 'email': user.email,
@@ -214,10 +214,10 @@ def signup_view(request):
                 'organization': organization,
                 'role': 'pending_user',  # Always pending - admin assigns real role
                 'subscriptionPlan': 'free_pending',  # Temporary plan
-                'isActive': True,
+                'isActive': False,  # Cannot login until approved
                 'isApproved': False,  # Requires admin approval
                 'approvalStatus': 'pending',
-                'modules': ['dashboard', 'data_store'],  # Limited access
+                'modules': [],  # No access until approved
                 'createdAt': user.date_joined.isoformat()
             }
         })

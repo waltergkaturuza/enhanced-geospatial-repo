@@ -279,8 +279,16 @@ export const Signup: React.FC = () => {
         userPath: selectedPath
       };
 
-      await signup(signupData as any);
-      navigate('/dashboard');
+      const response = await signup(signupData as any);
+      
+      // Check if approval is required (new behavior)
+      if (response && response.requiresApproval) {
+        // User cannot login yet - redirect to login with message
+        navigate('/login?message=approval_required');
+      } else {
+        // Old behavior for existing users (shouldn't happen for new signups)
+        navigate('/dashboard');
+      }
     } catch (err) {
       console.error('Access request failed:', err);
     }

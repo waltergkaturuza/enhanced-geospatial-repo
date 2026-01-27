@@ -657,6 +657,229 @@ class AdministrativeBoundary(models.Model):
         """Get AOIs that intersect with this boundary"""
         return AOI.objects.filter(geometry__intersects=self.geometry)
 
+class SubscriptionPlan(models.Model):
+    """Subscription plans/tiers for different user types"""
+    name = models.CharField(max_length=100, unique=True, help_text="Plan name (e.g., Educational, Professional, Enterprise)")
+    slug = models.SlugField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    
+    # Pricing
+    price_monthly = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Monthly price in USD")
+    price_yearly = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Yearly price in USD (discounted)")
+    is_free = models.BooleanField(default=False)
+    
+    # Quotas
+    max_aois = models.IntegerField(default=10)
+    max_download_size_gb = models.FloatField(default=50.0)
+    max_concurrent_downloads = models.IntegerField(default=3)
+    max_users = models.IntegerField(null=True, blank=True, help_text="For organization plans")
+    
+    # Features
+    features = models.JSONField(default=list, help_text="List of feature descriptions")
+    has_analytics = models.BooleanField(default=False)
+    has_api_access = models.BooleanField(default=False)
+    has_priority_support = models.BooleanField(default=False)
+    has_custom_processing = models.BooleanField(default=False)
+    
+    # Availability
+    is_active = models.BooleanField(default=True)
+    is_public = models.BooleanField(default=True, help_text="Visible on pricing page")
+    display_order = models.IntegerField(default=0)
+    
+    # Targeting
+    target_user_types = models.JSONField(
+        default=list, 
+        help_text="Recommended for: ['education', 'government', 'commercial']"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['display_order', 'price_monthly']
+        verbose_name = "Subscription Plan"
+        verbose_name_plural = "Subscription Plans"
+    
+    def __str__(self):
+        return f"{self.name} (${self.price_monthly}/mo)"
+    
+    def get_annual_savings(self):
+        """Calculate savings with annual plan"""
+        monthly_annual = self.price_monthly * 12
+        return monthly_annual - self.price_yearly
+
+class UserSubscription(models.Model):
+    """Track user's subscription status and billing"""
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='subscription'
+    )
+    plan = models.ForeignKey(
+        SubscriptionPlan,
+        on_delete=models.PROTECT,
+        related_name='subscribers'
+    )
+    
+    # Billing
+    billing_cycle = models.CharField(
+        max_length=20,
+        choices=[
+            ('monthly', 'Monthly'),
+            ('yearly', 'Yearly'),
+            ('one_time', 'One-Time'),
+            ('free', 'Free')
+        ],
+        default='monthly'
+    )
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('active', 'Active'),
+            ('cancelled', 'Cancelled'),
+            ('expired', 'Expired'),
+            ('suspended', 'Suspended'),
+            ('trial', 'Trial')
+        ],
+        default='trial'
+    )
+    
+    # Dates
+    starts_at = models.DateTimeField()
+    expires_at = models.DateTimeField(null=True, blank=True)
+    trial_ends_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    
+    # Payment
+    auto_renew = models.BooleanField(default=True)
+    payment_method = models.CharField(max_length=50, blank=True)
+    last_payment_date = models.DateTimeField(null=True, blank=True)
+    next_payment_date = models.DateTimeField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "User Subscription"
+        verbose_name_plural = "User Subscriptions"
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.plan.name} ({self.status})"
+    
+    def is_valid(self):
+        """Check if subscription is currently valid"""
+        if self.status != 'active':
+            return False
+        if self.expires_at and timezone.now() > self.expires_at:
+            return False
+        return True
+
+class Invoice(models.Model):
+    """Invoice tracking for subscription payments"""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='invoices'
+    )
+    subscription = models.ForeignKey(
+        UserSubscription,
+        on_delete=models.CASCADE,
+        related_name='invoices',
+        null=True,
+        blank=True
+    )
+    
+    # Invoice details
+    invoice_number = models.CharField(max_length=50, unique=True, db_index=True)
+    invoice_date = models.DateTimeField(auto_now_add=True)
+    due_date = models.DateTimeField()
+    
+    # Amounts
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default='USD')
+    
+    # Line items
+    items = models.JSONField(
+        default=list,
+        help_text="List of invoice items: [{description, quantity, unit_price, amount}]"
+    )
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('draft', 'Draft'),
+            ('sent', 'Sent'),
+            ('paid', 'Paid'),
+            ('overdue', 'Overdue'),
+            ('cancelled', 'Cancelled'),
+            ('refunded', 'Refunded')
+        ],
+        default='draft'
+    )
+    
+    # Payment tracking
+    paid_at = models.DateTimeField(null=True, blank=True)
+    payment_method = models.CharField(max_length=50, blank=True)
+    payment_reference = models.CharField(max_length=100, blank=True)
+    
+    # Organization details (for invoice)
+    billing_name = models.CharField(max_length=255)
+    billing_email = models.EmailField()
+    billing_address = models.TextField(blank=True)
+    tax_id = models.CharField(max_length=50, blank=True, help_text="VAT/Tax ID")
+    
+    # Notes
+    notes = models.TextField(blank=True, help_text="Internal notes")
+    customer_notes = models.TextField(blank=True, help_text="Notes visible to customer")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-invoice_date']
+        indexes = [
+            models.Index(fields=['user', '-invoice_date']),
+            models.Index(fields=['status', '-invoice_date']),
+            models.Index(fields=['invoice_number']),
+        ]
+        verbose_name = "Invoice"
+        verbose_name_plural = "Invoices"
+    
+    def __str__(self):
+        return f"Invoice {self.invoice_number} - {self.user.email} - ${self.total_amount}"
+    
+    def save(self, *args, **kwargs):
+        # Generate invoice number if not set
+        if not self.invoice_number:
+            import datetime
+            date_str = self.invoice_date.strftime('%Y%m') if self.invoice_date else datetime.datetime.now().strftime('%Y%m')
+            last_invoice = Invoice.objects.filter(invoice_number__startswith=f'INV-{date_str}').order_by('-invoice_number').first()
+            if last_invoice:
+                last_num = int(last_invoice.invoice_number.split('-')[-1])
+                self.invoice_number = f'INV-{date_str}-{last_num + 1:04d}'
+            else:
+                self.invoice_number = f'INV-{date_str}-0001'
+        
+        # Calculate tax and total
+        self.tax_amount = (self.subtotal * self.tax_rate) / 100
+        self.total_amount = self.subtotal + self.tax_amount
+        
+        super().save(*args, **kwargs)
+    
+    def mark_as_paid(self, payment_method='', reference=''):
+        """Mark invoice as paid"""
+        self.status = 'paid'
+        self.paid_at = timezone.now()
+        self.payment_method = payment_method
+        self.payment_reference = reference
+        self.save()
+
 # Signal handlers for automatic profile creation
 from django.db.models.signals import post_save
 from django.dispatch import receiver

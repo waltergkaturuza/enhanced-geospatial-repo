@@ -11,7 +11,7 @@ from django.db.models import Count, Q
 from .models import (
     UserProfile, AOI, SatelliteImage, Download, IndexResult,
     ProcessingJob, AdministrativeBoundarySet, AdministrativeBoundary,
-    AOISatelliteImage
+    AOISatelliteImage, SubscriptionPlan, UserSubscription, Invoice
 )
 
 
@@ -750,3 +750,127 @@ class AdministrativeBoundaryAdmin(ModelAdmin):
             )
         return 'No geometry'
     geometry_preview.short_description = 'Geometry Info'
+
+
+# ============================================================================
+# Subscription and Billing Admin
+# ============================================================================
+
+@admin.register(SubscriptionPlan)
+class SubscriptionPlanAdmin(admin.ModelAdmin):
+    """Admin interface for subscription plans/tiers"""
+    list_display = ('name', 'price_monthly', 'price_yearly', 'is_free', 'max_aois', 'max_download_size_gb', 'is_active', 'subscriber_count')
+    list_filter = ('is_free', 'is_active', 'is_public', 'has_analytics')
+    search_fields = ('name', 'slug', 'description')
+    prepopulated_fields = {'slug': ('name',)}
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'slug', 'description', 'display_order', 'is_active', 'is_public')
+        }),
+        ('Pricing', {
+            'fields': ('price_monthly', 'price_yearly', 'is_free')
+        }),
+        ('Quotas', {
+            'fields': ('max_aois', 'max_download_size_gb', 'max_concurrent_downloads', 'max_users')
+        }),
+        ('Features', {
+            'fields': ('features', 'has_analytics', 'has_api_access', 'has_priority_support', 'has_custom_processing')
+        }),
+        ('Targeting', {
+            'fields': ('target_user_types',)
+        }),
+    )
+    
+    def subscriber_count(self, obj):
+        return obj.subscribers.filter(status='active').count()
+    subscriber_count.short_description = 'Active Subscribers'
+
+
+@admin.register(UserSubscription)
+class UserSubscriptionAdmin(admin.ModelAdmin):
+    """Admin interface for user subscriptions"""
+    list_display = ('user_email', 'plan', 'status', 'billing_cycle', 'starts_at', 'expires_at', 'is_valid_status')
+    list_filter = ('status', 'billing_cycle', 'plan', 'auto_renew')
+    search_fields = ('user__email', 'user__first_name', 'user__last_name', 'plan__name')
+    date_hierarchy = 'starts_at'
+    
+    fieldsets = (
+        ('Subscription', {
+            'fields': ('user', 'plan', 'status', 'billing_cycle')
+        }),
+        ('Dates', {
+            'fields': ('starts_at', 'expires_at', 'trial_ends_at', 'cancelled_at')
+        }),
+        ('Payment', {
+            'fields': ('auto_renew', 'payment_method', 'last_payment_date', 'next_payment_date')
+        }),
+    )
+    
+    readonly_fields = ('created_at', 'updated_at')
+    
+    def user_email(self, obj):
+        return obj.user.email
+    user_email.short_description = 'User'
+    
+    def is_valid_status(self, obj):
+        if obj.is_valid():
+            return format_html('<span style="color: green;">✓ Valid</span>')
+        return format_html('<span style="color: red;">✗ Expired</span>')
+    is_valid_status.short_description = 'Valid'
+
+
+@admin.register(Invoice)
+class InvoiceAdmin(admin.ModelAdmin):
+    """Admin interface for invoices and billing"""
+    list_display = ('invoice_number', 'user_email', 'invoice_date', 'due_date', 'total_amount', 'status', 'status_badge')
+    list_filter = ('status', 'invoice_date', 'paid_at')
+    search_fields = ('invoice_number', 'user__email', 'user__first_name', 'user__last_name', 'billing_name', 'billing_email')
+    date_hierarchy = 'invoice_date'
+    
+    fieldsets = (
+        ('Invoice Details', {
+            'fields': ('invoice_number', 'user', 'subscription', 'invoice_date', 'due_date')
+        }),
+        ('Amounts', {
+            'fields': ('subtotal', 'tax_rate', 'tax_amount', 'total_amount', 'currency', 'items')
+        }),
+        ('Status & Payment', {
+            'fields': ('status', 'paid_at', 'payment_method', 'payment_reference')
+        }),
+        ('Billing Information', {
+            'fields': ('billing_name', 'billing_email', 'billing_address', 'tax_id')
+        }),
+        ('Notes', {
+            'fields': ('notes', 'customer_notes')
+        }),
+    )
+    
+    readonly_fields = ('invoice_number', 'tax_amount', 'total_amount')
+    actions = ['mark_as_sent', 'mark_as_paid', 'mark_as_overdue']
+    
+    def user_email(self, obj):
+        return obj.user.email
+    user_email.short_description = 'User'
+    
+    def status_badge(self, obj):
+        colors = {'paid': 'green', 'sent': 'blue', 'draft': 'gray', 'overdue': 'red', 'cancelled': 'orange', 'refunded': 'purple'}
+        color = colors.get(obj.status, 'gray')
+        return format_html('<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>', color, obj.status.upper())
+    status_badge.short_description = 'Status'
+    
+    @admin.action(description='Mark as sent')
+    def mark_as_sent(self, request, queryset):
+        updated = queryset.update(status='sent')
+        self.message_user(request, f'{updated} invoice(s) marked as sent.')
+    
+    @admin.action(description='Mark as paid')
+    def mark_as_paid(self, request, queryset):
+        for invoice in queryset:
+            invoice.mark_as_paid()
+        self.message_user(request, f'{queryset.count()} invoice(s) marked as paid.')
+    
+    @admin.action(description='Mark as overdue')
+    def mark_as_overdue(self, request, queryset):
+        updated = queryset.update(status='overdue')
+        self.message_user(request, f'{updated} invoice(s) marked as overdue.')

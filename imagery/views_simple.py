@@ -678,6 +678,10 @@ def approve_user(request):
         profile.approved_by = request.user
         profile.approved_at = timezone.now()
         
+        # IMPORTANT: Activate the user account (allow login)
+        target_user.is_active = True
+        target_user.save()
+        
         # Assign quotas based on role and subscription
         if assigned_subscription == 'free':
             profile.max_aois = assigned_quotas.get('max_aois', 10)
