@@ -880,6 +880,129 @@ class Invoice(models.Model):
         self.payment_reference = reference
         self.save()
 
+class SupportRequest(models.Model):
+    """Support requests, custom job requests, and user inquiries"""
+    REQUEST_TYPES = (
+        ('custom_job', 'Custom Job Request'),
+        ('business_inquiry', 'Business Inquiry'),
+        ('technical_support', 'Technical Support'),
+        ('data_request', 'Data Request'),
+        ('billing_question', 'Billing Question'),
+        ('feature_request', 'Feature Request'),
+        ('bug_report', 'Bug Report'),
+        ('general', 'General Inquiry'),
+    )
+    
+    PRIORITY = (
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('urgent', 'Urgent'),
+    )
+    
+    STATUS = (
+        ('new', 'New'),
+        ('open', 'Open'),
+        ('in_progress', 'In Progress'),
+        ('waiting_user', 'Waiting for User'),
+        ('resolved', 'Resolved'),
+        ('closed', 'Closed'),
+    )
+    
+    # User and request details
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='support_requests'
+    )
+    request_type = models.CharField(max_length=30, choices=REQUEST_TYPES)
+    subject = models.CharField(max_length=255)
+    description = models.TextField()
+    
+    # Status and priority
+    status = models.CharField(max_length=20, choices=STATUS, default='new')
+    priority = models.CharField(max_length=10, choices=PRIORITY, default='medium')
+    
+    # Assignment
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_requests'
+    )
+    
+    # Additional details for custom jobs
+    estimated_cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    estimated_hours = models.FloatField(null=True, blank=True)
+    deadline_requested = models.DateField(null=True, blank=True)
+    
+    # Files/attachments (store paths)
+    attachments = models.JSONField(default=list, blank=True, help_text="List of attachment file paths")
+    
+    # Timeline
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Internal notes
+    admin_notes = models.TextField(blank=True, help_text="Internal notes visible only to staff")
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['status', 'priority']),
+            models.Index(fields=['assigned_to', 'status']),
+        ]
+        verbose_name = "Support Request"
+        verbose_name_plural = "Support Requests"
+    
+    def __str__(self):
+        return f"{self.get_request_type_display()} - {self.subject} ({self.user.email})"
+    
+    def mark_resolved(self):
+        """Mark request as resolved"""
+        self.status = 'resolved'
+        self.resolved_at = timezone.now()
+        self.save()
+    
+    def mark_closed(self):
+        """Mark request as closed"""
+        self.status = 'closed'
+        self.closed_at = timezone.now()
+        self.save()
+
+class SupportMessage(models.Model):
+    """Messages/replies within a support request"""
+    request = models.ForeignKey(
+        SupportRequest,
+        on_delete=models.CASCADE,
+        related_name='messages'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
+    message = models.TextField()
+    is_staff_reply = models.BooleanField(default=False)
+    is_internal = models.BooleanField(default=False, help_text="Internal note, not visible to user")
+    
+    # Attachments
+    attachments = models.JSONField(default=list, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = "Support Message"
+        verbose_name_plural = "Support Messages"
+    
+    def __str__(self):
+        return f"Message by {self.user.email} on {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+
 # Signal handlers for automatic profile creation
 from django.db.models.signals import post_save
 from django.dispatch import receiver

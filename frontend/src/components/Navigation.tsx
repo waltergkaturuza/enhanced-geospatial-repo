@@ -15,11 +15,10 @@ const Navigation: React.FC<NavigationProps> = ({
     <header className="bg-gray-800 text-white">
       <div className="px-4 py-2 border-b border-gray-700">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-bold text-white">🇿🇼 ZimbabweExplorer</h1>
+          <h1 className="text-lg font-bold text-white">ZimbabweExplorer</h1>
           <div className="flex items-center space-x-3 text-xs">
-            <a href="#" className="text-gray-300 hover:text-white">Help</a>
-            <a href="#" className="text-gray-300 hover:text-white">Feedback</a>
-            <a href="#" className="text-gray-300 hover:text-white">Login</a>
+            <a href="/help" className="text-gray-300 hover:text-white">Help</a>
+            <a href="/feedback" className="text-gray-300 hover:text-white">Feedback</a>
           </div>
         </div>
       </div>

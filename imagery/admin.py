@@ -11,7 +11,8 @@ from django.db.models import Count, Q
 from .models import (
     UserProfile, AOI, SatelliteImage, Download, IndexResult,
     ProcessingJob, AdministrativeBoundarySet, AdministrativeBoundary,
-    AOISatelliteImage, SubscriptionPlan, UserSubscription, Invoice
+    AOISatelliteImage, SubscriptionPlan, UserSubscription, Invoice,
+    SupportRequest, SupportMessage
 )
 
 
@@ -874,3 +875,137 @@ class InvoiceAdmin(admin.ModelAdmin):
     def mark_as_overdue(self, request, queryset):
         updated = queryset.update(status='overdue')
         self.message_user(request, f'{updated} invoice(s) marked as overdue.')
+
+
+# ============================================================================
+# Support Request and Messaging Admin
+# ============================================================================
+
+class SupportMessageInline(admin.TabularInline):
+    """Inline messages for support requests"""
+    model = SupportMessage
+    extra = 1
+    fields = ('user', 'message', 'is_staff_reply', 'is_internal', 'created_at')
+    readonly_fields = ('created_at',)
+
+
+@admin.register(SupportRequest)
+class SupportRequestAdmin(admin.ModelAdmin):
+    """Admin interface for support requests and tickets"""
+    list_display = (
+        'id', 'user_email', 'request_type', 'subject', 
+        'status_badge', 'priority_badge', 'assigned_to', 
+        'created_at', 'message_count'
+    )
+    list_filter = ('status', 'priority', 'request_type', 'assigned_to')
+    search_fields = ('subject', 'description', 'user__email', 'user__first_name', 'user__last_name')
+    date_hierarchy = 'created_at'
+    
+    inlines = [SupportMessageInline]
+    
+    fieldsets = (
+        ('Request Details', {
+            'fields': ('user', 'request_type', 'subject', 'description', 'attachments')
+        }),
+        ('Status & Priority', {
+            'fields': ('status', 'priority', 'assigned_to')
+        }),
+        ('Custom Job Details', {
+            'fields': ('estimated_cost', 'estimated_hours', 'deadline_requested'),
+            'classes': ('collapse',)
+        }),
+        ('Timeline', {
+            'fields': ('created_at', 'updated_at', 'resolved_at', 'closed_at'),
+            'classes': ('collapse',)
+        }),
+        ('Internal', {
+            'fields': ('admin_notes',),
+            'description': 'These notes are only visible to staff members'
+        }),
+    )
+    
+    readonly_fields = ('created_at', 'updated_at', 'resolved_at', 'closed_at')
+    
+    actions = ['assign_to_me', 'mark_in_progress', 'mark_resolved', 'mark_closed']
+    
+    def user_email(self, obj):
+        return obj.user.email
+    user_email.short_description = 'User'
+    user_email.admin_order_field = 'user__email'
+    
+    def status_badge(self, obj):
+        colors = {
+            'new': '#3b82f6',
+            'open': '#10b981',
+            'in_progress': '#f59e0b',
+            'waiting_user': '#8b5cf6',
+            'resolved': '#6b7280',
+            'closed': '#374151'
+        }
+        color = colors.get(obj.status, 'gray')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px; font-size: 11px;">{}</span>',
+            color,
+            obj.status.replace('_', ' ').upper()
+        )
+    status_badge.short_description = 'Status'
+    
+    def priority_badge(self, obj):
+        colors = {'low': '#6b7280', 'medium': '#3b82f6', 'high': '#f59e0b', 'urgent': '#ef4444'}
+        color = colors.get(obj.priority, 'gray')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 8px; border-radius: 3px; font-size: 10px;">{}</span>',
+            color,
+            obj.priority.upper()
+        )
+    priority_badge.short_description = 'Priority'
+    
+    def message_count(self, obj):
+        count = obj.messages.count()
+        return format_html('<strong>{}</strong> message{}', count, 's' if count != 1 else '')
+    message_count.short_description = 'Messages'
+    
+    @admin.action(description='Assign to me')
+    def assign_to_me(self, request, queryset):
+        updated = queryset.update(assigned_to=request.user, status='open')
+        self.message_user(request, f'{updated} request(s) assigned to you.')
+    
+    @admin.action(description='Mark as in progress')
+    def mark_in_progress(self, request, queryset):
+        updated = queryset.update(status='in_progress')
+        self.message_user(request, f'{updated} request(s) marked as in progress.')
+    
+    @admin.action(description='Mark as resolved')
+    def mark_resolved(self, request, queryset):
+        for req in queryset:
+            req.mark_resolved()
+        self.message_user(request, f'{queryset.count()} request(s) marked as resolved.')
+    
+    @admin.action(description='Mark as closed')
+    def mark_closed(self, request, queryset):
+        for req in queryset:
+            req.mark_closed()
+        self.message_user(request, f'{queryset.count()} request(s) marked as closed.')
+
+
+@admin.register(SupportMessage)
+class SupportMessageAdmin(admin.ModelAdmin):
+    """Admin interface for support messages"""
+    list_display = ('request_link', 'user_email', 'message_preview', 'is_staff_reply', 'is_internal', 'created_at')
+    list_filter = ('is_staff_reply', 'is_internal', 'created_at')
+    search_fields = ('request__subject', 'user__email', 'message')
+    date_hierarchy = 'created_at'
+    
+    def request_link(self, obj):
+        url = reverse('admin:imagery_supportrequest_change', args=[obj.request.id])
+        return format_html('<a href="{}">{}</a>', url, obj.request.subject)
+    request_link.short_description = 'Request'
+    
+    def user_email(self, obj):
+        return obj.user.email
+    user_email.short_description = 'User'
+    
+    def message_preview(self, obj):
+        preview = obj.message[:100] + '...' if len(obj.message) > 100 else obj.message
+        return preview
+    message_preview.short_description = 'Message'
