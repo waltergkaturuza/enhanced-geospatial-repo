@@ -98,6 +98,13 @@ class UserProfile(models.Model):
     preferred_providers = models.JSONField(default=list, blank=True)
     notification_email = models.EmailField(blank=True)
     
+    # Access control - modules assigned to this user
+    assigned_modules = models.JSONField(
+        default=list, 
+        blank=True,
+        help_text='List of modules user can access (e.g., dashboard, imagery, data_store). Staff can upload/manage files, regular users download only.'
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

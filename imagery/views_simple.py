@@ -692,6 +692,8 @@ def approve_user(request):
             profile.max_download_size_gb = assigned_quotas.get('max_download_size_gb', 5000.0)
             profile.max_concurrent_downloads = assigned_quotas.get('max_concurrent_downloads', 50)
         
+        # Store assigned modules in profile
+        profile.assigned_modules = assigned_modules
         profile.save()
         
         # Assign user to appropriate group based on role
@@ -714,9 +716,24 @@ def approve_user(request):
             target_user.is_staff = True
             target_user.save()
         
+        # Assign modules based on role (IMPORTANT: Regular users get DOWNLOAD only, not UPLOAD)
+        if assigned_role == 'admin':
+            # Admin: Full system access
+            assigned_modules = ['dashboard', 'imagery', 'analytics', 'business', 'admin', 'upload', 'files', 'store']
+        elif assigned_role in ['analyst', 'business_user']:
+            # Analyst/Business: Download + advanced analytics (no upload/file management)
+            assigned_modules = ['dashboard', 'imagery', 'analytics', 'data_store']
+        elif assigned_role == 'researcher':
+            # Researcher: Download + basic analytics (no upload/file management)
+            assigned_modules = ['dashboard', 'imagery', 'analytics', 'data_store']
+        else:
+            # Viewer: Browse and download only
+            assigned_modules = ['dashboard', 'imagery', 'data_store']
+        
         logger.info(f"User {target_user.email} approved successfully:")
         logger.info(f"  - Role: {assigned_role}")
         logger.info(f"  - Subscription: {assigned_subscription}")
+        logger.info(f"  - Modules: {', '.join(assigned_modules)}")
         logger.info(f"  - Max AOIs: {profile.max_aois}")
         logger.info(f"  - Max Download: {profile.max_download_size_gb} GB")
         
@@ -730,6 +747,7 @@ def approve_user(request):
             'approved_at': profile.approved_at.isoformat(),
             'assigned_role': assigned_role,
             'assigned_subscription': assigned_subscription,
+            'assigned_modules': assigned_modules,
             'quotas': {
                 'max_aois': profile.max_aois,
                 'max_download_size_gb': profile.max_download_size_gb,
@@ -887,9 +905,11 @@ def admin_users(request):
             
             # Determine modules based on role
             if is_superuser:
+                # Staff/Admin: Full access
                 user_modules = ['dashboard', 'imagery', 'analytics', 'business', 'admin', 'upload', 'files', 'store']
             else:
-                user_modules = ['dashboard', 'imagery', 'upload']
+                # Regular users: Download only
+                user_modules = ['dashboard', 'imagery', 'data_store']
             
             users_data.append({
                 'id': str(user.id),

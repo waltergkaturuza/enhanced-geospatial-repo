@@ -55,14 +55,27 @@ def login_view(request):
             user_role = 'admin' if is_superuser else 'user'
             subscription_plan = 'enterprise' if is_superuser else 'free'
             
-            # All modules for superusers, limited for regular users
-            if is_superuser:
-                user_modules = [
-                    'dashboard', 'imagery', 'analytics', 'business', 
-                    'admin', 'upload', 'files', 'store'
-                ]
-            else:
-                user_modules = ['dashboard', 'imagery', 'upload']
+            # Check if user has assigned modules in profile (from approval system)
+            try:
+                if hasattr(user, 'profile') and user.profile.assigned_modules:
+                    user_modules = user.profile.assigned_modules
+                else:
+                    # Fallback: Assign based on staff status
+                    if is_superuser:
+                        # Staff/Admin: Full access including upload and file management
+                        user_modules = [
+                            'dashboard', 'imagery', 'analytics', 'business', 
+                            'admin', 'upload', 'files', 'store'
+                        ]
+                    else:
+                        # Regular users: Download only (no upload/file management)
+                        user_modules = ['dashboard', 'imagery', 'data_store']
+            except Exception:
+                # If profile doesn't exist or error, use safe defaults
+                if is_superuser:
+                    user_modules = ['dashboard', 'imagery', 'analytics', 'business', 'admin', 'upload', 'files', 'store']
+                else:
+                    user_modules = ['dashboard', 'imagery', 'data_store']
             
             return JsonResponse({
                 'success': True,
@@ -263,14 +276,27 @@ def user_profile(request):
     user_role = 'admin' if is_superuser else 'user'
     subscription_plan = 'enterprise' if is_superuser else 'free'
     
-    # All modules for superusers, limited for regular users
-    if is_superuser:
-        user_modules = [
-            'dashboard', 'imagery', 'analytics', 'business', 
-            'admin', 'upload', 'files', 'store'
-        ]
-    else:
-        user_modules = ['dashboard', 'imagery', 'upload']
+    # Check if user has assigned modules in profile (from approval system)
+    try:
+        if hasattr(user, 'profile') and user.profile.assigned_modules:
+            user_modules = user.profile.assigned_modules
+        else:
+            # Fallback: Assign based on staff status
+            if is_superuser:
+                # Staff/Admin: Full access including upload and file management
+                user_modules = [
+                    'dashboard', 'imagery', 'analytics', 'business', 
+                    'admin', 'upload', 'files', 'store'
+                ]
+            else:
+                # Regular users: Download only (no upload/file management)
+                user_modules = ['dashboard', 'imagery', 'data_store']
+    except Exception:
+        # If profile doesn't exist or error, use safe defaults
+        if is_superuser:
+            user_modules = ['dashboard', 'imagery', 'analytics', 'business', 'admin', 'upload', 'files', 'store']
+        else:
+            user_modules = ['dashboard', 'imagery', 'data_store']
     
     return JsonResponse({
         'success': True,
@@ -283,7 +309,7 @@ def user_profile(request):
             'role': user_role,
             'subscriptionPlan': subscription_plan,
             'isActive': user.is_active,
-            'isSuperuser': is_superuser,  # Add superuser flag
+            'isSuperuser': is_superuser,
             'emailVerified': True,
             'createdAt': user.date_joined.isoformat(),
             'modules': user_modules
