@@ -180,7 +180,7 @@ export const Dashboard: React.FC = () => {
       description: 'Upload satellite imagery and UAV data',
       icon: Upload,
       href: '/files',
-      hasAccess: hasModuleAccess('imagery'),
+      hasAccess: hasModuleAccess('upload'),  // Only staff/admin
       color: 'from-teal-500 to-cyan-600'
     },
     {
@@ -204,7 +204,7 @@ export const Dashboard: React.FC = () => {
       description: 'Browse and manage uploaded imagery files',
       icon: FolderTree,
       href: '/files',
-      hasAccess: hasModuleAccess('imagery'),
+      hasAccess: hasModuleAccess('files'),  // Only staff/admin
       color: 'from-emerald-500 to-teal-600'
     },
     {
