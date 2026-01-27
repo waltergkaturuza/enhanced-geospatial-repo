@@ -8,9 +8,23 @@ from django.conf import settings
 from datetime import timedelta
 from .models import UserProfile, AOI, Download, ProcessingJob, IndexResult
 from django.db.models import Count, Sum, Q
+from rest_framework.authtoken.models import Token
 import json
 import logging
 import os
+
+# Helper function to authenticate token
+def authenticate_token(request):
+    """Extract and authenticate token from request headers"""
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+    if auth_header.startswith('Token '):
+        token_key = auth_header.split(' ')[1]
+        try:
+            token = Token.objects.get(key=token_key)
+            return token.user
+        except Token.DoesNotExist:
+            return None
+    return None
 
 # Try to import psutil for system metrics, fallback if not available
 try:
@@ -540,7 +554,9 @@ def user_profile(request):
 def pending_users(request):
     """Get list of users pending approval with detailed application information"""
     try:
-        if not request.user.is_authenticated:
+        # Authenticate via token
+        user = authenticate_token(request)
+        if not user or not user.is_authenticated:
             return JsonResponse({
                 'success': False,
                 'message': 'Authentication required'
@@ -870,7 +886,9 @@ def reject_user(request):
 def admin_users(request):
     """Get all users for admin/role management"""
     try:
-        if not request.user.is_authenticated:
+        # Authenticate via token
+        user = authenticate_token(request)
+        if not user or not user.is_authenticated:
             return JsonResponse({
                 'success': False,
                 'message': 'Authentication required'
@@ -1248,13 +1266,13 @@ def database_stats(request):
 def dashboard_stats(request):
     """Get dashboard statistics for the authenticated user"""
     try:
-        if not request.user.is_authenticated:
+        # Authenticate via token
+        user = authenticate_token(request)
+        if not user or not user.is_authenticated:
             return JsonResponse({
                 'success': False,
                 'message': 'Authentication required'
             }, status=401)
-        
-        user = request.user
         
         # Get active projects (AOIs)
         active_projects = AOI.objects.filter(user=user).count()
@@ -1303,13 +1321,13 @@ def dashboard_stats(request):
 def dashboard_activity(request):
     """Get recent activity for the authenticated user"""
     try:
-        if not request.user.is_authenticated:
+        # Authenticate via token
+        user = authenticate_token(request)
+        if not user or not user.is_authenticated:
             return JsonResponse({
                 'success': False,
                 'message': 'Authentication required'
             }, status=401)
-        
-        user = request.user
         activities = []
         
         # Get recent downloads (last 10)
