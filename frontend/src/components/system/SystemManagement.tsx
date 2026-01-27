@@ -10,7 +10,9 @@ import {
   Database, 
   Server,
   ArrowLeft,
-  Home
+  Home,
+  CreditCard,
+  MessageSquare
 } from 'lucide-react';
 import AdminDashboard from './AdminDashboard';
 import UserManagement from './UserManagement';
@@ -20,8 +22,10 @@ import AuditLogs from './AuditLogs';
 import APIKeys from './APIKeys';
 import DatabaseManagement from './DatabaseManagement';
 import ServerStatus from './ServerStatus';
+import SubscriptionManagement from './SubscriptionManagement';
+import SupportRequests from './SupportRequests';
 
-type SystemTab = 'dashboard' | 'users' | 'roles' | 'settings' | 'audit' | 'api-keys' | 'database' | 'server';
+type SystemTab = 'dashboard' | 'users' | 'roles' | 'settings' | 'audit' | 'api-keys' | 'database' | 'server' | 'subscriptions' | 'support';
 
 interface NavItem {
   id: SystemTab;
@@ -33,6 +37,8 @@ const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Admin Dashboard', icon: BarChart3 },
   { id: 'users', label: 'User Management', icon: Users },
   { id: 'roles', label: 'Role Management', icon: Shield },
+  { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
+  { id: 'support', label: 'Support Requests', icon: MessageSquare },
   { id: 'settings', label: 'System Settings', icon: Settings },
   { id: 'audit', label: 'Audit Logs', icon: FileText },
   { id: 'api-keys', label: 'API Keys', icon: Key },
@@ -45,10 +51,15 @@ const SystemManagement: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<SystemTab>('dashboard');
 
-  // Detect URL path and set appropriate tab
+  // Detect URL path and query params to set appropriate tab
   useEffect(() => {
     const path = location.pathname;
-    if (path.includes('/admin/roles')) {
+    const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get('tab');
+    
+    if (tabParam && ['dashboard', 'users', 'roles', 'subscriptions', 'support', 'settings', 'audit', 'api-keys', 'database', 'server'].includes(tabParam)) {
+      setActiveTab(tabParam as SystemTab);
+    } else if (path.includes('/admin/roles')) {
       setActiveTab('roles');
     } else if (path.includes('/admin/approvals')) {
       setActiveTab('users'); // User Approvals is part of User Management
@@ -57,7 +68,7 @@ const SystemManagement: React.FC = () => {
     } else if (path === '/admin') {
       setActiveTab('dashboard');
     }
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -67,6 +78,10 @@ const SystemManagement: React.FC = () => {
         return <UserManagement />;
       case 'roles':
         return <RoleManagement />;
+      case 'subscriptions':
+        return <SubscriptionManagement />;
+      case 'support':
+        return <SupportRequests />;
       case 'settings':
         return <SystemSettings />;
       case 'audit':

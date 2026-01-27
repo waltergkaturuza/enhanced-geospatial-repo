@@ -50,7 +50,7 @@ export const MainNavigation: React.FC = () => {
         name: 'Files',
         href: '/files',
         icon: FolderTree,
-        show: user && hasModuleAccess('imagery')
+        show: user && hasModuleAccess('files')
       },
       {
         name: 'Analytics',

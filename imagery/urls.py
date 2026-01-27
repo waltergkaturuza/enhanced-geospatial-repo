@@ -64,4 +64,16 @@ urlpatterns = [
     
     # Database management endpoints
     path('admin/database-stats/', views_simple.database_stats, name='admin-database-stats'),
+    
+    # Subscription management endpoints
+    path('subscriptions/plans/', views_simple.subscription_plans, name='subscription-plans'),
+    path('subscriptions/current/', views_simple.current_subscription, name='current-subscription'),
+    path('subscriptions/invoices/', views_simple.user_invoices, name='user-invoices'),
+    
+    # Support request endpoints
+    path('support/requests/', views_simple.support_requests, name='support-requests'),
+    path('support/requests/<int:request_id>/', views_simple.support_request_detail, name='support-request-detail'),
+    
+    # Feedback endpoint
+    path('feedback/submit/', views_simple.submit_feedback, name='submit-feedback'),
 ]

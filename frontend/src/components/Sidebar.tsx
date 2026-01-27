@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAuthContext } from '../contexts/AuthContext';
 import SearchTabClean from './SearchTabClean';
 import DatasetsTab from './DatasetsTab.tsx';
 import AdditionalTab from './AdditionalTab.tsx';
@@ -52,6 +53,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = (props) => {
   const { activeTab } = props;
+  const { hasModuleAccess } = useAuthContext();
 
   return (
     <div className="w-72 bg-white border-r border-gray-300 flex flex-col">
@@ -85,19 +87,26 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
         {/* Additional Criteria Tab */}
         {activeTab === 'additional' && <AdditionalTab />}
         
-        {/* Upload Tab */}
+        {/* Upload Tab - Only for staff/admin */}
         {activeTab === 'upload' && (
-          <UploadTab 
-            onFilesUploaded={(files) => {
-              if (props.setUploadedFiles) {
-                props.setUploadedFiles([...props.uploadedFiles || [], ...files]);
-              }
-            }}
-            onFileRemove={(fileId) => {
-              console.log('Remove file:', fileId);
-              // Handle file removal logic here
-            }}
-          />
+          hasModuleAccess('upload') ? (
+            <UploadTab 
+              onFilesUploaded={(files) => {
+                if (props.setUploadedFiles) {
+                  props.setUploadedFiles([...props.uploadedFiles || [], ...files]);
+                }
+              }}
+              onFileRemove={(fileId) => {
+                console.log('Remove file:', fileId);
+                // Handle file removal logic here
+              }}
+            />
+          ) : (
+            <div className="p-4 text-center text-gray-600">
+              <p className="mb-2">Upload functionality is available for staff and admin users only.</p>
+              <p className="text-sm">Please contact an administrator if you need upload access.</p>
+            </div>
+          )
         )}
         
         {/* Results Tab */}

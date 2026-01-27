@@ -639,14 +639,16 @@ def approve_user(request):
     - Storage/compute quotas
     """
     try:
-        if not request.user.is_authenticated:
+        # Use token authentication
+        user = authenticate_token(request)
+        if not user:
             return JsonResponse({
                 'success': False,
                 'message': 'Authentication required'
             }, status=401)
         
         # Check if user is admin or superuser
-        if not (request.user.is_superuser or request.user.is_staff):
+        if not (user.is_superuser or user.is_staff):
             return JsonResponse({
                 'success': False,
                 'message': 'Admin access required'
@@ -665,7 +667,7 @@ def approve_user(request):
                 'message': 'User ID is required'
             }, status=400)
         
-        logger.info(f"Admin {request.user.username} approving user {user_id} with role {assigned_role}")
+        logger.info(f"Admin {user.username} approving user {user_id} with role {assigned_role}")
         
         from django.contrib.auth.models import User, Group
         from django.utils import timezone
@@ -689,9 +691,23 @@ def approve_user(request):
                 'message': 'User is already approved'
             }, status=400)
         
+        # Assign modules based on role FIRST (IMPORTANT: Regular users get DOWNLOAD only, not UPLOAD)
+        if assigned_role == 'admin':
+            # Admin: Full system access
+            assigned_modules = ['dashboard', 'imagery', 'analytics', 'business', 'admin', 'upload', 'files', 'store']
+        elif assigned_role in ['analyst', 'business_user']:
+            # Analyst/Business: Download + advanced analytics (no upload/file management)
+            assigned_modules = ['dashboard', 'imagery', 'analytics', 'data_store']
+        elif assigned_role == 'researcher':
+            # Researcher: Download + basic analytics (no upload/file management)
+            assigned_modules = ['dashboard', 'imagery', 'analytics', 'data_store']
+        else:
+            # Viewer: Browse and download only
+            assigned_modules = ['dashboard', 'imagery', 'data_store']
+        
         # Update approval status
         profile.approval_status = 'approved'
-        profile.approved_by = request.user
+        profile.approved_by = user
         profile.approved_at = timezone.now()
         
         # IMPORTANT: Activate the user account (allow login)
@@ -736,20 +752,6 @@ def approve_user(request):
             target_user.is_staff = True
             target_user.save()
         
-        # Assign modules based on role (IMPORTANT: Regular users get DOWNLOAD only, not UPLOAD)
-        if assigned_role == 'admin':
-            # Admin: Full system access
-            assigned_modules = ['dashboard', 'imagery', 'analytics', 'business', 'admin', 'upload', 'files', 'store']
-        elif assigned_role in ['analyst', 'business_user']:
-            # Analyst/Business: Download + advanced analytics (no upload/file management)
-            assigned_modules = ['dashboard', 'imagery', 'analytics', 'data_store']
-        elif assigned_role == 'researcher':
-            # Researcher: Download + basic analytics (no upload/file management)
-            assigned_modules = ['dashboard', 'imagery', 'analytics', 'data_store']
-        else:
-            # Viewer: Browse and download only
-            assigned_modules = ['dashboard', 'imagery', 'data_store']
-        
         logger.info(f"User {target_user.email} approved successfully:")
         logger.info(f"  - Role: {assigned_role}")
         logger.info(f"  - Subscription: {assigned_subscription}")
@@ -763,7 +765,7 @@ def approve_user(request):
         approval_result = {
             'user_id': user_id,
             'status': 'approved',
-            'approved_by': request.user.username,
+            'approved_by': user.username,
             'approved_at': profile.approved_at.isoformat(),
             'assigned_role': assigned_role,
             'assigned_subscription': assigned_subscription,
@@ -797,14 +799,16 @@ def reject_user(request):
     User account remains but cannot access data until re-applied.
     """
     try:
-        if not request.user.is_authenticated:
+        # Use token authentication
+        user = authenticate_token(request)
+        if not user:
             return JsonResponse({
                 'success': False,
                 'message': 'Authentication required'
             }, status=401)
         
         # Check if user is admin or superuser
-        if not (request.user.is_superuser or request.user.is_staff):
+        if not (user.is_superuser or user.is_staff):
             return JsonResponse({
                 'success': False,
                 'message': 'Admin access required'
@@ -826,7 +830,7 @@ def reject_user(request):
                 'message': 'Rejection reason is required'
             }, status=400)
         
-        logger.info(f"Admin {request.user.username} rejecting user {user_id}, reason: {rejection_reason}")
+        logger.info(f"Admin {user.username} rejecting user {user_id}, reason: {rejection_reason}")
         
         from django.contrib.auth.models import User
         from django.utils import timezone
@@ -846,7 +850,7 @@ def reject_user(request):
         # Update rejection status
         profile.approval_status = 'rejected'
         profile.rejection_reason = rejection_reason
-        profile.approved_by = request.user  # Track who rejected
+        profile.approved_by = user  # Track who rejected
         profile.approved_at = timezone.now()  # Track when rejected
         profile.save()
         
@@ -863,7 +867,7 @@ def reject_user(request):
         rejection_result = {
             'user_id': user_id,
             'status': 'rejected',
-            'rejected_by': request.user.username,
+            'rejected_by': user.username,
             'rejected_at': timezone.now().isoformat(),
             'rejection_reason': rejection_reason
         }
@@ -971,14 +975,16 @@ def admin_users(request):
 def update_user_role(request):
     """Update user role and status"""
     try:
-        if not request.user.is_authenticated:
+        # Use token authentication
+        user = authenticate_token(request)
+        if not user:
             return JsonResponse({
                 'success': False,
                 'message': 'Authentication required'
             }, status=401)
         
         # Check if user is admin or superuser
-        if not (request.user.is_superuser or request.user.is_staff):
+        if not (user.is_superuser or user.is_staff):
             return JsonResponse({
                 'success': False,
                 'message': 'Admin access required'
@@ -1006,7 +1012,7 @@ def update_user_role(request):
             }, status=404)
         
         # Prevent modifying superusers (unless current user is also superuser)
-        if target_user.is_superuser and not request.user.is_superuser:
+        if target_user.is_superuser and not user.is_superuser:
             return JsonResponse({
                 'success': False,
                 'message': 'Cannot modify superuser accounts'
@@ -1180,7 +1186,9 @@ def emergency_fix_columns(request):
 def database_stats(request):
     """Get real database statistics"""
     try:
-        if not request.user.is_authenticated:
+        # Use token authentication
+        user = authenticate_token(request)
+        if not user:
             return JsonResponse({
                 'success': False,
                 'message': 'Authentication required'
@@ -1436,4 +1444,501 @@ def dashboard_activity(request):
         return JsonResponse({
             'success': False,
             'message': f'Error getting dashboard activity: {str(e)}'
+        }, status=500)
+
+# ============================================================================
+# SUBSCRIPTION MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def subscription_plans(request):
+    """Get all available subscription plans"""
+    try:
+        user = authenticate_token(request)
+        if not user:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        from .models import SubscriptionPlan
+        
+        # Get active plans
+        plans = SubscriptionPlan.objects.filter(is_active=True, is_public=True).order_by('display_order')
+        
+        plans_data = []
+        for plan in plans:
+            plans_data.append({
+                'id': plan.id,
+                'name': plan.name,
+                'slug': plan.slug,
+                'description': plan.description,
+                'pricing': {
+                    'monthly': float(plan.price_monthly),
+                    'yearly': float(plan.price_yearly),
+                    'is_free': plan.is_free,
+                    'annual_savings': float(plan.get_annual_savings()) if plan.price_yearly else 0
+                },
+                'quotas': {
+                    'max_aois': plan.max_aois,
+                    'max_download_size_gb': plan.max_download_size_gb,
+                    'max_concurrent_downloads': plan.max_concurrent_downloads,
+                    'max_users': plan.max_users
+                },
+                'features': plan.features,
+                'capabilities': {
+                    'analytics': plan.has_analytics,
+                    'api_access': plan.has_api_access,
+                    'priority_support': plan.has_priority_support,
+                    'custom_processing': plan.has_custom_processing
+                },
+                'target_user_types': plan.target_user_types
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'data': plans_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting subscription plans: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error getting subscription plans: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def current_subscription(request):
+    """Get current user's subscription details"""
+    try:
+        user = authenticate_token(request)
+        if not user:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        from .models import UserSubscription
+        
+        try:
+            subscription = UserSubscription.objects.select_related('plan').get(user=user)
+            
+            subscription_data = {
+                'id': subscription.id,
+                'plan': {
+                    'name': subscription.plan.name,
+                    'slug': subscription.plan.slug,
+                    'description': subscription.plan.description
+                },
+                'status': subscription.status,
+                'billing_cycle': subscription.billing_cycle,
+                'dates': {
+                    'starts_at': subscription.starts_at.isoformat() if subscription.starts_at else None,
+                    'expires_at': subscription.expires_at.isoformat() if subscription.expires_at else None,
+                    'trial_ends_at': subscription.trial_ends_at.isoformat() if subscription.trial_ends_at else None,
+                    'cancelled_at': subscription.cancelled_at.isoformat() if subscription.cancelled_at else None,
+                    'next_payment_date': subscription.next_payment_date.isoformat() if subscription.next_payment_date else None
+                },
+                'auto_renew': subscription.auto_renew,
+                'is_valid': subscription.is_valid()
+            }
+            
+            return JsonResponse({
+                'success': True,
+                'data': subscription_data
+            })
+            
+        except UserSubscription.DoesNotExist:
+            return JsonResponse({
+                'success': True,
+                'data': None,
+                'message': 'No active subscription found'
+            })
+        
+    except Exception as e:
+        logger.error(f"Error getting current subscription: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error getting current subscription: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def user_invoices(request):
+    """Get user's invoices"""
+    try:
+        user = authenticate_token(request)
+        if not user:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        from .models import Invoice
+        
+        invoices = Invoice.objects.filter(user=user).order_by('-invoice_date')
+        
+        invoices_data = []
+        for invoice in invoices:
+            invoices_data.append({
+                'id': invoice.id,
+                'invoice_number': invoice.invoice_number,
+                'invoice_date': invoice.invoice_date.isoformat(),
+                'due_date': invoice.due_date.isoformat(),
+                'amounts': {
+                    'subtotal': float(invoice.subtotal),
+                    'tax_rate': float(invoice.tax_rate),
+                    'tax_amount': float(invoice.tax_amount),
+                    'total': float(invoice.total_amount),
+                    'currency': invoice.currency
+                },
+                'status': invoice.status,
+                'paid_at': invoice.paid_at.isoformat() if invoice.paid_at else None,
+                'payment_method': invoice.payment_method,
+                'items': invoice.items
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'data': invoices_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting invoices: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error getting invoices: {str(e)}'
+        }, status=500)
+
+# ============================================================================
+# SUPPORT REQUEST ENDPOINTS
+# ============================================================================
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def support_requests(request):
+    """List or create support requests"""
+    try:
+        user = authenticate_token(request)
+        if not user:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        from .models import SupportRequest, SupportMessage
+        
+        if request.method == 'GET':
+            # Staff can see all requests, users see only their own
+            if user.is_staff or user.is_superuser:
+                status_filter = request.GET.get('status')
+                if status_filter:
+                    requests_qs = SupportRequest.objects.filter(status=status_filter)
+                else:
+                    requests_qs = SupportRequest.objects.all()
+            else:
+                requests_qs = SupportRequest.objects.filter(user=user)
+            
+            requests_qs = requests_qs.select_related('user', 'assigned_to').order_by('-created_at')
+            
+            requests_data = []
+            for req in requests_qs:
+                # Get message count
+                message_count = req.messages.count()
+                last_message = req.messages.last()
+                
+                requests_data.append({
+                    'id': req.id,
+                    'request_type': req.request_type,
+                    'request_type_display': req.get_request_type_display(),
+                    'subject': req.subject,
+                    'description': req.description,
+                    'status': req.status,
+                    'status_display': req.get_status_display(),
+                    'priority': req.priority,
+                    'priority_display': req.get_priority_display(),
+                    'user': {
+                        'id': req.user.id,
+                        'email': req.user.email,
+                        'name': f"{req.user.first_name} {req.user.last_name}".strip()
+                    },
+                    'assigned_to': {
+                        'id': req.assigned_to.id,
+                        'email': req.assigned_to.email,
+                        'name': f"{req.assigned_to.first_name} {req.assigned_to.last_name}".strip()
+                    } if req.assigned_to else None,
+                    'created_at': req.created_at.isoformat(),
+                    'updated_at': req.updated_at.isoformat(),
+                    'resolved_at': req.resolved_at.isoformat() if req.resolved_at else None,
+                    'message_count': message_count,
+                    'last_message_at': last_message.created_at.isoformat() if last_message else None
+                })
+            
+            return JsonResponse({
+                'success': True,
+                'data': requests_data
+            })
+        
+        elif request.method == 'POST':
+            data = json.loads(request.body)
+            
+            # Create new support request
+            support_request = SupportRequest.objects.create(
+                user=user,
+                request_type=data.get('request_type', 'general'),
+                subject=data.get('subject', ''),
+                description=data.get('description', ''),
+                priority=data.get('priority', 'medium')
+            )
+            
+            # Create initial message
+            if data.get('description'):
+                SupportMessage.objects.create(
+                    request=support_request,
+                    user=user,
+                    message=data.get('description'),
+                    is_staff_reply=False
+                )
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Support request created successfully',
+                'data': {
+                    'id': support_request.id,
+                    'subject': support_request.subject
+                }
+            })
+        
+    except Exception as e:
+        logger.error(f"Error handling support requests: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error handling support requests: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET", "POST", "PUT"])
+def support_request_detail(request, request_id):
+    """Get or update a specific support request with messages"""
+    try:
+        user = authenticate_token(request)
+        if not user:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        from .models import SupportRequest, SupportMessage
+        
+        # Get the support request
+        try:
+            support_request = SupportRequest.objects.select_related('user', 'assigned_to').get(id=request_id)
+        except SupportRequest.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'Support request not found'
+            }, status=404)
+        
+        # Check access permission
+        if not (user.is_staff or user.is_superuser or support_request.user == user):
+            return JsonResponse({
+                'success': False,
+                'message': 'Access denied'
+            }, status=403)
+        
+        if request.method == 'GET':
+            # Get all messages
+            messages = support_request.messages.select_related('user').order_by('created_at')
+            
+            # Filter out internal messages for non-staff
+            if not (user.is_staff or user.is_superuser):
+                messages = messages.filter(is_internal=False)
+            
+            messages_data = []
+            for msg in messages:
+                messages_data.append({
+                    'id': msg.id,
+                    'user': {
+                        'id': msg.user.id,
+                        'email': msg.user.email,
+                        'name': f"{msg.user.first_name} {msg.user.last_name}".strip()
+                    },
+                    'message': msg.message,
+                    'is_staff_reply': msg.is_staff_reply,
+                    'is_internal': msg.is_internal,
+                    'created_at': msg.created_at.isoformat()
+                })
+            
+            request_data = {
+                'id': support_request.id,
+                'request_type': support_request.request_type,
+                'request_type_display': support_request.get_request_type_display(),
+                'subject': support_request.subject,
+                'description': support_request.description,
+                'status': support_request.status,
+                'status_display': support_request.get_status_display(),
+                'priority': support_request.priority,
+                'priority_display': support_request.get_priority_display(),
+                'user': {
+                    'id': support_request.user.id,
+                    'email': support_request.user.email,
+                    'name': f"{support_request.user.first_name} {support_request.user.last_name}".strip()
+                },
+                'assigned_to': {
+                    'id': support_request.assigned_to.id,
+                    'email': support_request.assigned_to.email,
+                    'name': f"{support_request.assigned_to.first_name} {support_request.assigned_to.last_name}".strip()
+                } if support_request.assigned_to else None,
+                'created_at': support_request.created_at.isoformat(),
+                'updated_at': support_request.updated_at.isoformat(),
+                'resolved_at': support_request.resolved_at.isoformat() if support_request.resolved_at else None,
+                'messages': messages_data
+            }
+            
+            return JsonResponse({
+                'success': True,
+                'data': request_data
+            })
+        
+        elif request.method == 'POST':
+            # Add a new message
+            data = json.loads(request.body)
+            
+            message = SupportMessage.objects.create(
+                request=support_request,
+                user=user,
+                message=data.get('message', ''),
+                is_staff_reply=user.is_staff or user.is_superuser,
+                is_internal=data.get('is_internal', False) and (user.is_staff or user.is_superuser)
+            )
+            
+            # Update request status if needed
+            if support_request.status == 'waiting_user' and not message.is_staff_reply:
+                support_request.status = 'open'
+                support_request.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Message added successfully',
+                'data': {
+                    'id': message.id,
+                    'created_at': message.created_at.isoformat()
+                }
+            })
+        
+        elif request.method == 'PUT':
+            # Update request (staff only)
+            if not (user.is_staff or user.is_superuser):
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Only staff can update request details'
+                }, status=403)
+            
+            data = json.loads(request.body)
+            
+            if 'status' in data:
+                support_request.status = data['status']
+                if data['status'] == 'resolved':
+                    support_request.mark_resolved()
+                elif data['status'] == 'closed':
+                    support_request.mark_closed()
+            
+            if 'priority' in data:
+                support_request.priority = data['priority']
+            
+            if 'assigned_to' in data:
+                if data['assigned_to']:
+                    from django.contrib.auth.models import User
+                    assigned_user = User.objects.get(id=data['assigned_to'])
+                    support_request.assigned_to = assigned_user
+                else:
+                    support_request.assigned_to = None
+            
+            support_request.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Support request updated successfully'
+            })
+        
+    except Exception as e:
+        logger.error(f"Error handling support request detail: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error handling support request: {str(e)}'
+        }, status=500)
+
+# ============================================================================
+# FEEDBACK ENDPOINT
+# ============================================================================
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def submit_feedback(request):
+    """Submit user feedback"""
+    try:
+        user = authenticate_token(request)
+        if not user:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        from .models import SupportRequest, SupportMessage
+        
+        data = json.loads(request.body)
+        
+        # Create support request with type 'feature_request' or 'general'
+        feedback_type = data.get('type', 'general')
+        rating = data.get('rating', 0)
+        subject = data.get('subject', 'User Feedback')
+        message = data.get('message', '')
+        
+        # Add rating to description
+        description = f"Rating: {rating}/5\n\n{message}"
+        
+        # Map feedback type to support request type
+        type_mapping = {
+            'feature': 'feature_request',
+            'bug': 'bug_report',
+            'general': 'general',
+            'improvement': 'feature_request'
+        }
+        
+        request_type = type_mapping.get(feedback_type, 'general')
+        
+        # Create the feedback as a support request
+        feedback_request = SupportRequest.objects.create(
+            user=user,
+            request_type=request_type,
+            subject=subject,
+            description=description,
+            priority='low'  # Feedback typically low priority
+        )
+        
+        # Create initial message
+        SupportMessage.objects.create(
+            request=feedback_request,
+            user=user,
+            message=description,
+            is_staff_reply=False
+        )
+        
+        logger.info(f"Feedback submitted by {user.email}: {subject}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Thank you for your feedback! We appreciate your input.',
+            'data': {
+                'id': feedback_request.id
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error submitting feedback: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error submitting feedback: {str(e)}'
         }, status=500)

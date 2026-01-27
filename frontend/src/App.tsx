@@ -15,6 +15,8 @@ import UserProfileManagement from './components/auth/UserProfileManagement';
 import Dashboard from './components/Dashboard';
 import ZimbabweExplorer from './components/ZimbabweExplorer';
 import ImageFileManager from './components/ImageFileManager';
+import HelpCenter from './components/HelpCenter';
+import Feedback from './components/Feedback';
 
 // Business Components
 import ShoppingCartComponent from './components/business/ShoppingCart';
@@ -290,6 +292,35 @@ function App() {
                     requiredPermissions={['admin_access']}
                     requiredModules={['admin']}
                   >
+                    <SystemManagement />
+                  </ProtectedRoute>
+                }
+              />
+              
+              {/* Help and Support Routes */}
+              <Route
+                path="/help"
+                element={
+                  <ProtectedRoute>
+                    <HelpCenter />
+                  </ProtectedRoute>
+                }
+              />
+              
+              <Route
+                path="/feedback"
+                element={
+                  <ProtectedRoute>
+                    <Feedback />
+                  </ProtectedRoute>
+                }
+              />
+              
+              <Route
+                path="/support/new"
+                element={
+                  <ProtectedRoute>
+                    <MainNavigation />
                     <SystemManagement />
                   </ProtectedRoute>
                 }

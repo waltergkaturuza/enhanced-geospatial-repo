@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAuthContext } from '../contexts/AuthContext';
 
 interface NavigationProps {
   activeTab: 'search' | 'datasets' | 'additional' | 'upload' | 'results';
@@ -11,6 +12,7 @@ const Navigation: React.FC<NavigationProps> = ({
   setActiveTab,
   handleClearSearch
 }) => {
+  const { hasModuleAccess } = useAuthContext();
   return (
     <header className="bg-gray-800 text-white">
       <div className="px-4 py-2 border-b border-gray-700">
@@ -49,14 +51,16 @@ const Navigation: React.FC<NavigationProps> = ({
           >
             Additional Criteria
           </button>
-          <button 
-            onClick={() => setActiveTab('upload')}
-            className={`px-3 py-1.5 rounded-t text-xs font-medium ${
-              activeTab === 'upload' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'
-            }`}
-          >
-            Upload Imagery
-          </button>
+          {hasModuleAccess('upload') && (
+            <button 
+              onClick={() => setActiveTab('upload')}
+              className={`px-3 py-1.5 rounded-t text-xs font-medium ${
+                activeTab === 'upload' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'
+              }`}
+            >
+              Upload Imagery
+            </button>
+          )}
           <button 
             onClick={() => setActiveTab('results')}
             className={`px-4 py-2 rounded-t text-sm font-medium ${
