@@ -21,6 +21,11 @@ import NewSupportRequest from './components/NewSupportRequest';
 
 // Business Components
 import ShoppingCartComponent from './components/business/ShoppingCart';
+import Store from './components/business/Store';
+import ShoppingCartNew from './components/business/ShoppingCartNew';
+import ProductDetail from './components/business/ProductDetail';
+import OrderManagement from './components/business/OrderManagement';
+import Wishlist from './components/business/Wishlist';
 
 // Admin Components
 import RoleManagement from './components/admin/RoleManagement';
@@ -219,12 +224,53 @@ function App() {
                 }
               />
               
+              {/* Store Routes */}
               <Route
                 path="/store"
                 element={
                   <ProtectedRoute requiredModules={['business']}>
                     <MainNavigation />
-                    <ShoppingCartComponent />
+                    <Store />
+                  </ProtectedRoute>
+                }
+              />
+              
+              <Route
+                path="/store/product/:productId"
+                element={
+                  <ProtectedRoute requiredModules={['business']}>
+                    <MainNavigation />
+                    <ProductDetail />
+                  </ProtectedRoute>
+                }
+              />
+              
+              <Route
+                path="/store/cart"
+                element={
+                  <ProtectedRoute requiredModules={['business']}>
+                    <MainNavigation />
+                    <ShoppingCartNew />
+                  </ProtectedRoute>
+                }
+              />
+              
+              <Route
+                path="/store/order/:orderId"
+                element={
+                  <ProtectedRoute requiredModules={['business']}>
+                    <MainNavigation />
+                    <OrderManagement />
+                  </ProtectedRoute>
+                }
+              />
+              
+              <Route
+                path="/store/wishlist"
+                element={
+                  <ProtectedRoute requiredModules={['business']}>
+                    <MainNavigation />
+                    <Wishlist />
                   </ProtectedRoute>
                 }
               />
