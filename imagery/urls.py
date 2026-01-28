@@ -5,6 +5,7 @@ from . import file_manager_api
 from . import ai_metadata_extractor
 from . import enhanced_views
 from . import auth_views
+from . import store_views
 
 # API URL patterns for the geospatial application
 urlpatterns = [
@@ -87,4 +88,29 @@ urlpatterns = [
     path('admin/users/update-status/', views_simple.update_user_status, name='admin-update-user-status'),
     path('admin/users/delete/', views_simple.delete_user, name='admin-delete-user'),
     path('admin/users/<int:user_id>/details/', views_simple.get_user_details, name='admin-user-details'),
+    
+    # Store/E-commerce endpoints
+    # Product catalog
+    path('store/categories/', store_views.get_product_categories, name='store-categories'),
+    path('store/products/', store_views.get_products, name='store-products'),
+    path('store/products/<int:product_id>/', store_views.get_product_detail, name='store-product-detail'),
+    
+    # Cart management
+    path('store/cart/', store_views.get_cart, name='store-cart'),
+    path('store/cart/add/', store_views.add_to_cart, name='store-cart-add'),
+    path('store/cart/update/<int:item_id>/', store_views.update_cart_item, name='store-cart-update'),
+    path('store/cart/remove/<int:item_id>/', store_views.remove_from_cart, name='store-cart-remove'),
+    path('store/cart/clear/', store_views.clear_cart, name='store-cart-clear'),
+    
+    # Orders
+    path('store/checkout/', store_views.create_order, name='store-checkout'),
+    path('store/orders/', store_views.get_orders, name='store-orders'),
+    path('store/orders/<int:order_id>/', store_views.get_order_detail, name='store-order-detail'),
+    
+    # Reviews
+    path('store/reviews/create/', store_views.create_review, name='store-review-create'),
+    
+    # Wishlist
+    path('store/wishlist/', store_views.get_wishlist, name='store-wishlist'),
+    path('store/wishlist/toggle/', store_views.toggle_wishlist, name='store-wishlist-toggle'),
 ]

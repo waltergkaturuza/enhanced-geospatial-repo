@@ -1003,6 +1003,320 @@ class SupportMessage(models.Model):
     def __str__(self):
         return f"Message by {self.user.email} on {self.created_at.strftime('%Y-%m-%d %H:%M')}"
 
+# ============================================================================
+# STORE / E-COMMERCE MODELS
+# ============================================================================
+
+class ProductCategory(models.Model):
+    """Product categories for the store"""
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(unique=True)
+    description = models.TextField(blank=True)
+    icon = models.CharField(max_length=50, blank=True, help_text="Icon name from lucide-react")
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
+    is_active = models.BooleanField(default=True)
+    display_order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['display_order', 'name']
+        verbose_name_plural = "Product Categories"
+    
+    def __str__(self):
+        return self.name
+
+class Product(models.Model):
+    """Products available in the store"""
+    PRODUCT_TYPES = (
+        ('imagery', 'Satellite Imagery'),
+        ('analysis', 'Analysis Service'),
+        ('subscription', 'Subscription Plan'),
+        ('processing', 'Processing Service'),
+        ('data', 'Geospatial Data'),
+        ('report', 'Custom Report'),
+    )
+    
+    # Basic info
+    name = models.CharField(max_length=255)
+    slug = models.SlugField(unique=True)
+    description = models.TextField()
+    short_description = models.CharField(max_length=255, blank=True)
+    product_type = models.CharField(max_length=20, choices=PRODUCT_TYPES)
+    category = models.ForeignKey(ProductCategory, on_delete=models.SET_NULL, null=True, related_name='products')
+    
+    # Pricing
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    compare_at_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Original price for showing discounts")
+    currency = models.CharField(max_length=3, default='USD')
+    
+    # Product details
+    provider = models.CharField(max_length=100, blank=True)
+    thumbnail = models.CharField(max_length=500, blank=True, help_text="Image URL or path")
+    images = models.JSONField(default=list, blank=True, help_text="Additional product images")
+    
+    # Specifications (flexible JSON field)
+    specifications = models.JSONField(default=dict, blank=True, help_text="Product specs like size, format, area, date range, etc.")
+    
+    # Inventory
+    is_digital = models.BooleanField(default=True)
+    stock_quantity = models.IntegerField(default=0, help_text="For physical products")
+    track_inventory = models.BooleanField(default=False)
+    
+    # SEO
+    meta_title = models.CharField(max_length=255, blank=True)
+    meta_description = models.TextField(blank=True)
+    keywords = models.JSONField(default=list, blank=True)
+    
+    # Status
+    is_active = models.BooleanField(default=True)
+    is_featured = models.BooleanField(default=False)
+    
+    # Stats
+    views_count = models.IntegerField(default=0)
+    purchases_count = models.IntegerField(default=0)
+    rating_average = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
+    rating_count = models.IntegerField(default=0)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['product_type', 'is_active']),
+            models.Index(fields=['category', 'is_active']),
+            models.Index(fields=['-created_at']),
+            models.Index(fields=['-rating_average']),
+        ]
+    
+    def __str__(self):
+        return self.name
+    
+    def get_discount_percentage(self):
+        """Calculate discount percentage"""
+        if self.compare_at_price and self.compare_at_price > self.price:
+            return int(((self.compare_at_price - self.price) / self.compare_at_price) * 100)
+        return 0
+    
+    def increment_views(self):
+        """Increment views count"""
+        self.views_count += 1
+        self.save(update_fields=['views_count'])
+
+class Cart(models.Model):
+    """Shopping cart for users"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='carts')
+    session_key = models.CharField(max_length=100, blank=True, help_text="For guest users")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-updated_at']
+    
+    def __str__(self):
+        return f"Cart for {self.user.email if self.user else self.session_key}"
+    
+    def get_total(self):
+        """Calculate cart total"""
+        return sum(item.get_subtotal() for item in self.items.all())
+    
+    def get_item_count(self):
+        """Get total number of items"""
+        return sum(item.quantity for item in self.items.all())
+
+class CartItem(models.Model):
+    """Items in a shopping cart"""
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.IntegerField(default=1, validators=[MinValueValidator(1)])
+    price_at_addition = models.DecimalField(max_digits=10, decimal_places=2, help_text="Price when added to cart")
+    custom_options = models.JSONField(default=dict, blank=True, help_text="Custom options like area, date range, etc.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['cart', 'product']
+    
+    def __str__(self):
+        return f"{self.quantity}x {self.product.name}"
+    
+    def get_subtotal(self):
+        """Calculate item subtotal"""
+        return self.price_at_addition * self.quantity
+
+class Order(models.Model):
+    """Customer orders"""
+    ORDER_STATUS = (
+        ('pending', 'Pending Payment'),
+        ('paid', 'Paid'),
+        ('processing', 'Processing'),
+        ('ready', 'Ready for Download'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+        ('refunded', 'Refunded'),
+    )
+    
+    # Order details
+    order_number = models.CharField(max_length=50, unique=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders')
+    
+    # Status
+    status = models.CharField(max_length=20, choices=ORDER_STATUS, default='pending')
+    
+    # Pricing
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    processing_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    total = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default='USD')
+    
+    # Billing info
+    billing_address = models.JSONField(default=dict, blank=True)
+    
+    # Notes
+    customer_notes = models.TextField(blank=True)
+    admin_notes = models.TextField(blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['order_number']),
+        ]
+    
+    def __str__(self):
+        return f"Order {self.order_number} - {self.user.email}"
+    
+    def generate_order_number(self):
+        """Generate unique order number"""
+        import random
+        import string
+        timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+        random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        return f"ORD-{timestamp}-{random_str}"
+
+class OrderItem(models.Model):
+    """Items in an order"""
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True)
+    product_name = models.CharField(max_length=255, help_text="Store product name at time of purchase")
+    product_description = models.TextField(blank=True)
+    quantity = models.IntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    # Custom options/specifications
+    options = models.JSONField(default=dict, blank=True)
+    
+    # Download info for digital products
+    download_url = models.CharField(max_length=500, blank=True)
+    download_expires_at = models.DateTimeField(null=True, blank=True)
+    download_count = models.IntegerField(default=0)
+    max_downloads = models.IntegerField(default=5)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.quantity}x {self.product_name}"
+
+class Payment(models.Model):
+    """Payment records"""
+    PAYMENT_METHOD = (
+        ('card', 'Credit/Debit Card'),
+        ('paypal', 'PayPal'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('mobile_money', 'Mobile Money'),
+        ('crypto', 'Cryptocurrency'),
+    )
+    
+    PAYMENT_STATUS = (
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('refunded', 'Refunded'),
+        ('cancelled', 'Cancelled'),
+    )
+    
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='payments')
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD)
+    status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='pending')
+    
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default='USD')
+    
+    # Payment gateway details
+    transaction_id = models.CharField(max_length=255, blank=True)
+    gateway = models.CharField(max_length=50, blank=True, help_text="Payment gateway used")
+    gateway_response = models.JSONField(default=dict, blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Payment {self.id} for Order {self.order.order_number}"
+
+class ProductReview(models.Model):
+    """Product reviews and ratings"""
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='reviews')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, help_text="Order this review is for")
+    
+    rating = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    title = models.CharField(max_length=255, blank=True)
+    review = models.TextField()
+    
+    # Helpful votes
+    helpful_count = models.IntegerField(default=0)
+    not_helpful_count = models.IntegerField(default=0)
+    
+    # Verification
+    is_verified_purchase = models.BooleanField(default=False)
+    
+    # Moderation
+    is_approved = models.BooleanField(default=True)
+    is_featured = models.BooleanField(default=False)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        unique_together = ['product', 'user', 'order']
+        indexes = [
+            models.Index(fields=['product', '-created_at']),
+            models.Index(fields=['product', '-rating']),
+        ]
+    
+    def __str__(self):
+        return f"{self.rating}★ review by {self.user.email} for {self.product.name}"
+
+class Wishlist(models.Model):
+    """User wishlists"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='wishlists')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['user', 'product']
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.user.email}'s wishlist - {self.product.name}"
+
 # Signal handlers for automatic profile creation
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -1011,4 +1325,12 @@ from django.dispatch import receiver
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
         UserProfile.objects.create(user=instance)
+
+@receiver(post_save, sender=Order)
+def update_order_status(sender, instance, created, **kwargs):
+    """Update order status based on payment"""
+    if not created and instance.payments.filter(status='completed').exists():
+        if instance.status == 'pending':
+            instance.status = 'paid'
+            instance.save(update_fields=['status'])
 
