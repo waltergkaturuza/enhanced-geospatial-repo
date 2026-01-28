@@ -1,45 +1,74 @@
-import React, { useState } from 'react';
-import { Search, Filter, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, ChevronDown, ChevronUp, X, Loader2 } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/api';
 
-const products = [
-  'NDVI',
-  'Land Cover',
-  'UAV Imagery', 
-  'Change Detection',
-  'Surface Reflectance',
-  'LST',
-  'Burned Area',
-  'Snow Cover',
-  'Vegetation Indices',
-  'DEM',
-  'DSM',
-  'CHM',
-  'Water Quality',
-  'Soil Moisture',
-  'Urban Mapping',
-];
+interface Product {
+  id: string;
+  name: string;
+  category: string;
+}
 
-const formats = [
-  'GeoTIFF',
-  'JPEG',
-  'PNG',
-  'Shapefile',
-  'KML',
-  'GPX',
-  'NetCDF',
-  'HDF5',
-  'CSV',
-  'LAS',
-  'LAZ',
-];
+interface Format {
+  id: string;
+  name: string;
+  extension: string;
+  category: string;
+}
 
-const AdditionalTab: React.FC = () => {
+interface AdditionalTabProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onApply: (selectedProducts: string[], selectedFormats: string[]) => void;
+}
+
+const AdditionalTab: React.FC<AdditionalTabProps> = ({ isOpen, onClose, onApply }) => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [formats, setFormats] = useState<Format[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [selectedFormats, setSelectedFormats] = useState<string[]>([]);
   const [expandedProducts, setExpandedProducts] = useState(true);
   const [expandedFormats, setExpandedFormats] = useState(true);
   const [searchProducts, setSearchProducts] = useState('');
   const [searchFormats, setSearchFormats] = useState('');
+
+  // Fetch products and formats from the backend
+  useEffect(() => {
+    if (isOpen && products.length === 0 && formats.length === 0) {
+      fetchData();
+    }
+  }, [isOpen]);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const baseUrl = getApiBaseUrl();
+      
+      // Fetch products
+      const productsResponse = await fetch(`${baseUrl}/additional/products/`);
+      const productsData = await productsResponse.json();
+      
+      if (productsData.success) {
+        setProducts(productsData.data);
+      }
+      
+      // Fetch formats
+      const formatsResponse = await fetch(`${baseUrl}/additional/formats/`);
+      const formatsData = await formatsResponse.json();
+      
+      if (formatsData.success) {
+        setFormats(formatsData.data);
+      }
+    } catch (err) {
+      console.error('Error fetching additional criteria data:', err);
+      setError('Failed to load data. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleProductChange = (product: string) => {
     setSelectedProducts(prev => 
@@ -58,63 +87,108 @@ const AdditionalTab: React.FC = () => {
   };
 
   const filteredProducts = products.filter(product =>
-    product.toLowerCase().includes(searchProducts.toLowerCase())
+    product.name.toLowerCase().includes(searchProducts.toLowerCase())
   );
 
   const filteredFormats = formats.filter(format =>
-    format.toLowerCase().includes(searchFormats.toLowerCase())
+    format.name.toLowerCase().includes(searchFormats.toLowerCase())
   );
 
+  const handleApply = () => {
+    onApply(selectedProducts, selectedFormats);
+    onClose();
+  };
+
+  const handleClear = () => {
+    setSelectedProducts([]);
+    setSelectedFormats([]);
+    setSearchProducts('');
+    setSearchFormats('');
+  };
+
+  if (!isOpen) return null;
+
   return (
-    <div className="p-6 max-w-6xl mx-auto bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
-      {/* Header */}
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Additional Criteria</h2>
-        <p className="text-gray-600">Select the data products and formats that match your requirements</p>
-        <div className="w-24 h-1 bg-gradient-to-r from-blue-500 to-green-500 rounded-full mt-2"></div>
-      </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onClose}>
+      <div 
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-green-600 p-6 relative">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 hover:bg-white/20 rounded-lg transition-colors"
+            aria-label="Close modal"
+          >
+            <X className="w-6 h-6 text-white" />
+          </button>
+          <h2 className="text-3xl font-bold text-white mb-2">Additional Criteria</h2>
+          <p className="text-blue-100">Select the data products and formats that match your requirements</p>
+        </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Selected Products</p>
-              <p className="text-2xl font-bold text-blue-600">{selectedProducts.length}</p>
+        {/* Scrollable Content */}
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-700 text-sm">{error}</p>
+              <button 
+                onClick={fetchData}
+                className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+              >
+                Retry
+              </button>
             </div>
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Filter className="w-5 h-5 text-blue-600" />
-            </div>
+          )}
+          
+          {/* Header */}
+          <div className="mb-8">
+            <div className="w-24 h-1 bg-gradient-to-r from-blue-500 to-green-500 rounded-full"></div>
           </div>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Selected Formats</p>
-              <p className="text-2xl font-bold text-green-600">{selectedFormats.length}</p>
-            </div>
-            <div className="p-2 bg-green-100 rounded-lg">
-              <Filter className="w-5 h-5 text-green-600" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Search Results</p>
-              <p className="text-2xl font-bold text-purple-600">
-                {filteredProducts.length + filteredFormats.length}
-              </p>
-            </div>
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Search className="w-5 h-5 text-purple-600" />
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+          {/* Summary Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Selected Products</p>
+                  <p className="text-2xl font-bold text-blue-600">{selectedProducts.length}</p>
+                </div>
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Filter className="w-5 h-5 text-blue-600" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Selected Formats</p>
+                  <p className="text-2xl font-bold text-green-600">{selectedFormats.length}</p>
+                </div>
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <Filter className="w-5 h-5 text-green-600" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Search Results</p>
+                  <p className="text-2xl font-bold text-purple-600">
+                    {filteredProducts.length + filteredFormats.length}
+                  </p>
+                </div>
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Search className="w-5 h-5 text-purple-600" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Products Section */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
           <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6">
@@ -157,22 +231,26 @@ const AdditionalTab: React.FC = () => {
               
               {/* Products Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto">
-                {filteredProducts.map((product) => (
+                {isLoading ? (
+                  <div className="col-span-2 flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                  </div>
+                ) : filteredProducts.map((product) => (
                   <label 
-                    key={product} 
+                    key={product.id} 
                     className={`flex items-center space-x-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                      selectedProducts.includes(product)
+                      selectedProducts.includes(product.id)
                         ? 'bg-blue-50 border-blue-300 text-blue-900'
                         : 'bg-gray-50 border-gray-200 hover:bg-blue-50 hover:border-blue-200'
                     }`}
                   >
                     <input 
                       type="checkbox" 
-                      checked={selectedProducts.includes(product)}
-                      onChange={() => handleProductChange(product)}
+                      checked={selectedProducts.includes(product.id)}
+                      onChange={() => handleProductChange(product.id)}
                       className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" 
                     />
-                    <span className="text-sm font-medium">{product}</span>
+                    <span className="text-sm font-medium">{product.name}</span>
                   </label>
                 ))}
               </div>
@@ -229,22 +307,26 @@ const AdditionalTab: React.FC = () => {
               
               {/* Formats Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto">
-                {filteredFormats.map((format) => (
+                {isLoading ? (
+                  <div className="col-span-2 flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-green-600" />
+                  </div>
+                ) : filteredFormats.map((format) => (
                   <label 
-                    key={format} 
+                    key={format.id} 
                     className={`flex items-center space-x-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                      selectedFormats.includes(format)
+                      selectedFormats.includes(format.id)
                         ? 'bg-green-50 border-green-300 text-green-900'
                         : 'bg-gray-50 border-gray-200 hover:bg-green-50 hover:border-green-200'
                     }`}
                   >
                     <input 
                       type="checkbox" 
-                      checked={selectedFormats.includes(format)}
-                      onChange={() => handleFormatChange(format)}
+                      checked={selectedFormats.includes(format.id)}
+                      onChange={() => handleFormatChange(format.id)}
                       className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500" 
                     />
-                    <span className="text-sm font-medium">{format}</span>
+                    <span className="text-sm font-medium">{format.name}</span>
                   </label>
                 ))}
               </div>
@@ -258,29 +340,35 @@ const AdditionalTab: React.FC = () => {
             </div>
           )}
         </div>
-      </div>
-
-      {/* Footer Actions */}
-      <div className="mt-8 bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-        <div className="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
-          <div className="text-sm text-gray-600">
-            The search result limit is 100 records; select a Country, Feature Class, and/or Feature Type to reduce your chances of exceeding this limit.
           </div>
-          <div className="flex space-x-3">
-            <button 
-              onClick={() => {
-                setSelectedProducts([]);
-                setSelectedFormats([]);
-                setSearchProducts('');
-                setSearchFormats('');
-              }}
-              className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-            >
-              Clear
-            </button>
-            <button className="px-6 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg hover:from-blue-600 hover:to-green-600 transition-all font-medium shadow-lg">
-              Search
-            </button>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="border-t border-gray-200 p-6 bg-gray-50">
+          <div className="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
+            <div className="text-sm text-gray-600">
+              Filter your search by selecting specific products and file formats
+            </div>
+            <div className="flex space-x-3">
+              <button 
+                onClick={handleClear}
+                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+              >
+                Clear All
+              </button>
+              <button 
+                onClick={onClose}
+                className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleApply}
+                className="px-6 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg hover:from-blue-600 hover:to-green-600 transition-all font-medium shadow-lg"
+              >
+                Apply Filters
+              </button>
+            </div>
           </div>
         </div>
       </div>

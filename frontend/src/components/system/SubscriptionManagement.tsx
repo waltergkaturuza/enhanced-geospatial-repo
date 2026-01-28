@@ -82,6 +82,7 @@ const SubscriptionManagement: React.FC = () => {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'current' | 'plans' | 'invoices'>('current');
 
   useEffect(() => {
@@ -91,20 +92,22 @@ const SubscriptionManagement: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
+      setError(null);
       
       const headers = { Authorization: `Token ${token}` };
       
       const [subscriptionRes, plansRes, invoicesRes] = await Promise.all([
-        axios.get('/api/subscriptions/current/', { headers }),
-        axios.get('/api/subscriptions/plans/', { headers }),
-        axios.get('/api/subscriptions/invoices/', { headers })
+        axios.get('/api/subscriptions/current/', { headers }).catch(() => ({ data: { data: null } })),
+        axios.get('/api/subscriptions/plans/', { headers }).catch(() => ({ data: { data: [] } })),
+        axios.get('/api/subscriptions/invoices/', { headers }).catch(() => ({ data: { data: [] } }))
       ]);
       
       setCurrentSubscription(subscriptionRes.data.data);
-      setPlans(plansRes.data.data);
-      setInvoices(invoicesRes.data.data);
-    } catch (error) {
+      setPlans(plansRes.data.data || []);
+      setInvoices(invoicesRes.data.data || []);
+    } catch (error: any) {
       console.error('Error loading subscription data:', error);
+      setError(error.response?.data?.message || 'Failed to load subscription data');
     } finally {
       setLoading(false);
     }
@@ -139,6 +142,24 @@ const SubscriptionManagement: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="text-center py-12">
+          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Unable to Load Subscriptions</h3>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={loadData}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     );
   }

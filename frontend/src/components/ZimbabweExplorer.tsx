@@ -1,8 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Navigation from './Navigation';
 import Sidebar from './Sidebar';
 import MapContainer from './MapContainer';
+import AdditionalTab from './AdditionalTab';
 import { GeospatialAPI } from '@/lib/api';
 import { useAppState, useSearchHandlers, useMapState, useAreaSelection } from '@/hooks';
 
@@ -12,6 +13,11 @@ const ZimbabweExplorer: React.FC = () => {
   const mapState = useMapState();
   const areaSelection = useAreaSelection();
   const searchHandlers = useSearchHandlers(appState);
+
+  // Additional criteria modal state
+  const [isAdditionalCriteriaOpen, setIsAdditionalCriteriaOpen] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [selectedFormats, setSelectedFormats] = useState<string[]>([]);
 
   // File upload ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -44,12 +50,27 @@ const ZimbabweExplorer: React.FC = () => {
     refetch();
   };
 
+  const handleApplyAdditionalCriteria = (products: string[], formats: string[]) => {
+    setSelectedProducts(products);
+    setSelectedFormats(formats);
+    // You can store these in the search criteria or use them in the search query
+    console.log('Applied filters - Products:', products, 'Formats:', formats);
+    // TODO: Integrate with search criteria
+  };
+
   return (
     <div className="h-screen flex flex-col bg-gray-100" style={{fontFamily: 'Roboto, sans-serif'}}>
       <Navigation
-        activeTab={appState.activeTab}
-        setActiveTab={appState.setActiveTab}
+        activeTab={appState.activeTab as 'search' | 'datasets' | 'upload' | 'results'}
+        setActiveTab={appState.setActiveTab as (tab: 'search' | 'datasets' | 'upload' | 'results') => void}
         handleClearSearch={searchHandlers.handleClearSearch}
+        onOpenAdditionalCriteria={() => setIsAdditionalCriteriaOpen(true)}
+      />
+
+      <AdditionalTab
+        isOpen={isAdditionalCriteriaOpen}
+        onClose={() => setIsAdditionalCriteriaOpen(false)}
+        onApply={handleApplyAdditionalCriteria}
       />
 
       <div className="flex flex-1 overflow-hidden">

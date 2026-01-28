@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { SearchCriteria } from '@/types';
 
 export const useAppState = () => {
-  const [activeTab, setActiveTab] = useState<'search' | 'datasets' | 'additional' | 'upload' | 'results'>('search');
+  const [activeTab, setActiveTab] = useState<'search' | 'datasets' | 'upload' | 'results'>('search');
   const [selectedProvince, setSelectedProvince] = useState<string>('All Zimbabwe');
   const [selectedDistrict, setSelectedDistrict] = useState<string>('');
   const [selectedCoordinates, setSelectedCoordinates] = useState<string>('');

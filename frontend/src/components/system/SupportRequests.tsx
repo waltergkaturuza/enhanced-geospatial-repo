@@ -62,6 +62,7 @@ const SupportRequests: React.FC = () => {
   const [requests, setRequests] = useState<SupportRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<RequestDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showNewRequestModal, setShowNewRequestModal] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [newMessage, setNewMessage] = useState('');
@@ -81,13 +82,16 @@ const SupportRequests: React.FC = () => {
   const loadRequests = async () => {
     try {
       setLoading(true);
+      setError(null);
       const headers = { Authorization: `Token ${token}` };
       const params = statusFilter ? { status: statusFilter } : {};
       
       const response = await axios.get('/api/support/requests/', { headers, params });
-      setRequests(response.data.data);
-    } catch (error) {
+      setRequests(response.data.data || []);
+    } catch (error: any) {
       console.error('Error loading support requests:', error);
+      setError(error.response?.data?.message || 'Failed to load support requests');
+      setRequests([]);
     } finally {
       setLoading(false);
     }
@@ -198,6 +202,24 @@ const SupportRequests: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="text-center py-12">
+          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Unable to Load Support Requests</h3>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={loadRequests}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     );
   }

@@ -17,6 +17,7 @@ import ZimbabweExplorer from './components/ZimbabweExplorer';
 import ImageFileManager from './components/ImageFileManager';
 import HelpCenter from './components/HelpCenter';
 import Feedback from './components/Feedback';
+import NewSupportRequest from './components/NewSupportRequest';
 
 // Business Components
 import ShoppingCartComponent from './components/business/ShoppingCart';
@@ -320,8 +321,7 @@ function App() {
                 path="/support/new"
                 element={
                   <ProtectedRoute>
-                    <MainNavigation />
-                    <SystemManagement />
+                    <NewSupportRequest />
                   </ProtectedRoute>
                 }
               />

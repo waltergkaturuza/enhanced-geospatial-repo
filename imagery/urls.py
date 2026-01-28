@@ -76,4 +76,8 @@ urlpatterns = [
     
     # Feedback endpoint
     path('feedback/submit/', views_simple.submit_feedback, name='submit-feedback'),
+    
+    # Additional criteria endpoints
+    path('additional/products/', views_simple.get_available_products, name='additional-products'),
+    path('additional/formats/', views_simple.get_available_formats, name='additional-formats'),
 ]

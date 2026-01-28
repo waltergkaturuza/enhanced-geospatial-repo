@@ -563,7 +563,7 @@ def pending_users(request):
             }, status=401)
         
         # Check if user is admin or superuser
-        if not (request.user.is_superuser or request.user.is_staff):
+        if not (user.is_superuser or user.is_staff):
             return JsonResponse({
                 'success': False,
                 'message': 'Admin access required'
@@ -899,7 +899,7 @@ def admin_users(request):
             }, status=401)
         
         # Check if user is admin or superuser
-        if not (request.user.is_superuser or request.user.is_staff):
+        if not (user.is_superuser or user.is_staff):
             return JsonResponse({
                 'success': False,
                 'message': 'Admin access required'
@@ -1941,4 +1941,74 @@ def submit_feedback(request):
         return JsonResponse({
             'success': False,
             'message': f'Error submitting feedback: {str(e)}'
+        }, status=500)
+
+# ============================================================================
+# ADDITIONAL CRITERIA ENDPOINTS
+# ============================================================================
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_available_products(request):
+    """Get list of available data products"""
+    try:
+        products = [
+            {'id': 'ndvi', 'name': 'NDVI', 'category': 'vegetation'},
+            {'id': 'land_cover', 'name': 'Land Cover', 'category': 'classification'},
+            {'id': 'uav_imagery', 'name': 'UAV Imagery', 'category': 'imagery'},
+            {'id': 'change_detection', 'name': 'Change Detection', 'category': 'analysis'},
+            {'id': 'surface_reflectance', 'name': 'Surface Reflectance', 'category': 'imagery'},
+            {'id': 'lst', 'name': 'LST', 'category': 'thermal'},
+            {'id': 'burned_area', 'name': 'Burned Area', 'category': 'classification'},
+            {'id': 'snow_cover', 'name': 'Snow Cover', 'category': 'classification'},
+            {'id': 'vegetation_indices', 'name': 'Vegetation Indices', 'category': 'vegetation'},
+            {'id': 'dem', 'name': 'DEM', 'category': 'elevation'},
+            {'id': 'dsm', 'name': 'DSM', 'category': 'elevation'},
+            {'id': 'chm', 'name': 'CHM', 'category': 'elevation'},
+            {'id': 'water_quality', 'name': 'Water Quality', 'category': 'water'},
+            {'id': 'soil_moisture', 'name': 'Soil Moisture', 'category': 'soil'},
+            {'id': 'urban_mapping', 'name': 'Urban Mapping', 'category': 'classification'},
+        ]
+        
+        return JsonResponse({
+            'success': True,
+            'data': products
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching products: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error fetching products: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_available_formats(request):
+    """Get list of available file formats"""
+    try:
+        formats = [
+            {'id': 'geotiff', 'name': 'GeoTIFF', 'extension': '.tif', 'category': 'raster'},
+            {'id': 'jpeg', 'name': 'JPEG', 'extension': '.jpg', 'category': 'raster'},
+            {'id': 'png', 'name': 'PNG', 'extension': '.png', 'category': 'raster'},
+            {'id': 'shapefile', 'name': 'Shapefile', 'extension': '.shp', 'category': 'vector'},
+            {'id': 'kml', 'name': 'KML', 'extension': '.kml', 'category': 'vector'},
+            {'id': 'gpx', 'name': 'GPX', 'extension': '.gpx', 'category': 'vector'},
+            {'id': 'netcdf', 'name': 'NetCDF', 'extension': '.nc', 'category': 'raster'},
+            {'id': 'hdf5', 'name': 'HDF5', 'extension': '.h5', 'category': 'raster'},
+            {'id': 'csv', 'name': 'CSV', 'extension': '.csv', 'category': 'tabular'},
+            {'id': 'las', 'name': 'LAS', 'extension': '.las', 'category': 'point_cloud'},
+            {'id': 'laz', 'name': 'LAZ', 'extension': '.laz', 'category': 'point_cloud'},
+        ]
+        
+        return JsonResponse({
+            'success': True,
+            'data': formats
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching formats: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error fetching formats: {str(e)}'
         }, status=500)

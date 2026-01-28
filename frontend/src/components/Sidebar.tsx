@@ -2,13 +2,12 @@ import React from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
 import SearchTabClean from './SearchTabClean';
 import DatasetsTab from './DatasetsTab.tsx';
-import AdditionalTab from './AdditionalTab.tsx';
 import UploadTab from './UploadTab';
 import ResultsTab from './ResultsTab';
 import SearchButtons from './SearchButtons';
 
 interface SidebarProps {
-  activeTab: 'search' | 'datasets' | 'additional' | 'upload' | 'results';
+  activeTab: 'search' | 'datasets' | 'upload' | 'results';
   // Props that will be passed down to individual tabs
   selectedProvince: string;
   setSelectedProvince: (province: string) => void;
@@ -83,9 +82,6 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
             setSearchCriteria={props.setSearchCriteria}
           />
         )}
-        
-        {/* Additional Criteria Tab */}
-        {activeTab === 'additional' && <AdditionalTab />}
         
         {/* Upload Tab - Only for staff/admin */}
         {activeTab === 'upload' && (

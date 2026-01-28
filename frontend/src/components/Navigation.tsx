@@ -2,15 +2,17 @@ import React from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
 
 interface NavigationProps {
-  activeTab: 'search' | 'datasets' | 'additional' | 'upload' | 'results';
-  setActiveTab: (tab: 'search' | 'datasets' | 'additional' | 'upload' | 'results') => void;
+  activeTab: 'search' | 'datasets' | 'upload' | 'results';
+  setActiveTab: (tab: 'search' | 'datasets' | 'upload' | 'results') => void;
   handleClearSearch: () => void;
+  onOpenAdditionalCriteria: () => void;
 }
 
 const Navigation: React.FC<NavigationProps> = ({
   activeTab,
   setActiveTab,
-  handleClearSearch
+  handleClearSearch,
+  onOpenAdditionalCriteria
 }) => {
   const { hasModuleAccess } = useAuthContext();
   return (
@@ -44,10 +46,8 @@ const Navigation: React.FC<NavigationProps> = ({
             Data Sets
           </button>
           <button 
-            onClick={() => setActiveTab('additional')}
-            className={`px-3 py-1.5 rounded-t text-xs font-medium ${
-              activeTab === 'additional' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'
-            }`}
+            onClick={onOpenAdditionalCriteria}
+            className="px-3 py-1.5 rounded-t text-xs font-medium text-gray-300 hover:text-white hover:bg-blue-600/50 transition-colors"
           >
             Additional Criteria
           </button>
