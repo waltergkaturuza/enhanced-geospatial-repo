@@ -1944,6 +1944,252 @@ def submit_feedback(request):
         }, status=500)
 
 # ============================================================================
+# USER MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def create_user(request):
+    """Create a new staff member or user"""
+    try:
+        user = authenticate_token(request)
+        if not user or not (user.is_superuser or user.is_staff):
+            return JsonResponse({
+                'success': False,
+                'message': 'Admin access required'
+            }, status=403)
+        
+        from django.contrib.auth.models import User
+        data = json.loads(request.body)
+        
+        # Create the user
+        new_user = User.objects.create_user(
+            username=data.get('email'),
+            email=data.get('email'),
+            password=data.get('password'),
+            first_name=data.get('firstName', ''),
+            last_name=data.get('lastName', '')
+        )
+        
+        # Set role based on input
+        role = data.get('role', 'user')
+        if role == 'admin':
+            new_user.is_staff = True
+            new_user.is_superuser = True
+        elif role == 'staff':
+            new_user.is_staff = True
+        
+        new_user.save()
+        
+        # Create user profile
+        profile, _ = UserProfile.objects.get_or_create(user=new_user)
+        profile.organization = data.get('organization', '')
+        profile.is_approved = True  # Auto-approve staff members
+        profile.save()
+        
+        logger.info(f"User created by {user.email}: {new_user.email}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'User created successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error creating user: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error creating user: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_user(request):
+    """Update user details"""
+    try:
+        user = authenticate_token(request)
+        if not user or not (user.is_superuser or user.is_staff):
+            return JsonResponse({
+                'success': False,
+                'message': 'Admin access required'
+            }, status=403)
+        
+        from django.contrib.auth.models import User
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        
+        target_user = User.objects.get(id=user_id)
+        
+        # Update basic info
+        if 'email' in data:
+            target_user.email = data['email']
+            target_user.username = data['email']
+        if 'firstName' in data:
+            target_user.first_name = data['firstName']
+        if 'lastName' in data:
+            target_user.last_name = data['lastName']
+        if 'password' in data and data['password']:
+            target_user.set_password(data['password'])
+        
+        # Update role
+        if 'role' in data:
+            role = data['role']
+            if role == 'admin':
+                target_user.is_staff = True
+                target_user.is_superuser = True
+            elif role == 'staff':
+                target_user.is_staff = True
+                target_user.is_superuser = False
+            else:
+                target_user.is_staff = False
+                target_user.is_superuser = False
+        
+        target_user.save()
+        
+        # Update profile
+        profile, _ = UserProfile.objects.get_or_create(user=target_user)
+        if 'organization' in data:
+            profile.organization = data['organization']
+        profile.save()
+        
+        logger.info(f"User updated by {user.email}: {target_user.email}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'User updated successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating user: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error updating user: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_user_status(request):
+    """Suspend or activate a user"""
+    try:
+        user = authenticate_token(request)
+        if not user or not (user.is_superuser or user.is_staff):
+            return JsonResponse({
+                'success': False,
+                'message': 'Admin access required'
+            }, status=403)
+        
+        from django.contrib.auth.models import User
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        is_active = data.get('is_active', True)
+        
+        target_user = User.objects.get(id=user_id)
+        target_user.is_active = is_active
+        target_user.save()
+        
+        logger.info(f"User status updated by {user.email}: {target_user.email} - Active: {is_active}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'User {"activated" if is_active else "suspended"} successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating user status: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error updating user status: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_user(request):
+    """Delete a user"""
+    try:
+        user = authenticate_token(request)
+        if not user or not (user.is_superuser or user.is_staff):
+            return JsonResponse({
+                'success': False,
+                'message': 'Admin access required'
+            }, status=403)
+        
+        from django.contrib.auth.models import User
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        
+        target_user = User.objects.get(id=user_id)
+        email = target_user.email
+        target_user.delete()
+        
+        logger.info(f"User deleted by {user.email}: {email}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'User deleted successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting user: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error deleting user: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_user_details(request, user_id):
+    """Get detailed information about a specific user"""
+    try:
+        user = authenticate_token(request)
+        if not user or not (user.is_superuser or user.is_staff):
+            return JsonResponse({
+                'success': False,
+                'message': 'Admin access required'
+            }, status=403)
+        
+        from django.contrib.auth.models import User
+        target_user = User.objects.get(id=user_id)
+        profile = UserProfile.objects.get(user=target_user)
+        
+        # Get activity log (recent actions)
+        activity_log = []
+        # Add recent downloads
+        recent_downloads = Download.objects.filter(user=target_user).order_by('-requested_at')[:5]
+        for download in recent_downloads:
+            activity_log.append({
+                'action': 'Download Request',
+                'timestamp': download.requested_at.isoformat(),
+                'details': f'Image: {download.satellite_image.tile_id if download.satellite_image else "N/A"}'
+            })
+        
+        # Get login history (simplified - would need a separate model in production)
+        login_history = []
+        
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'id': target_user.id,
+                'email': target_user.email,
+                'firstName': target_user.first_name,
+                'lastName': target_user.last_name,
+                'role': 'admin' if target_user.is_superuser else ('staff' if target_user.is_staff else 'user'),
+                'isActive': target_user.is_active,
+                'isApproved': profile.is_approved,
+                'createdAt': target_user.date_joined.isoformat(),
+                'lastLoginAt': target_user.last_login.isoformat() if target_user.last_login else None,
+                'organization': profile.organization,
+                'activityLog': activity_log,
+                'loginHistory': login_history
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching user details: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error fetching user details: {str(e)}'
+        }, status=500)
+
+# ============================================================================
 # ADDITIONAL CRITERIA ENDPOINTS
 # ============================================================================
 

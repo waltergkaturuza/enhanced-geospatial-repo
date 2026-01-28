@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useAuthContext } from '../../contexts/AuthContext';
 import { 
   CreditCard, 
   Check, 
@@ -77,7 +76,6 @@ interface Invoice {
 }
 
 const SubscriptionManagement: React.FC = () => {
-  const { token } = useAuthContext();
   const [currentSubscription, setCurrentSubscription] = useState<CurrentSubscription | null>(null);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -94,6 +92,7 @@ const SubscriptionManagement: React.FC = () => {
       setLoading(true);
       setError(null);
       
+      const token = localStorage.getItem('authToken');
       const headers = { Authorization: `Token ${token}` };
       
       const [subscriptionRes, plansRes, invoicesRes] = await Promise.all([
@@ -116,8 +115,12 @@ const SubscriptionManagement: React.FC = () => {
   const getStatusBadge = (status: string) => {
     const statusStyles: { [key: string]: string } = {
       active: 'bg-green-100 text-green-800',
+      paid: 'bg-green-100 text-green-800',
       trial: 'bg-blue-100 text-blue-800',
+      pending: 'bg-yellow-100 text-yellow-800',
       cancelled: 'bg-red-100 text-red-800',
+      failed: 'bg-red-100 text-red-800',
+      overdue: 'bg-red-100 text-red-800',
       expired: 'bg-gray-100 text-gray-800',
       suspended: 'bg-yellow-100 text-yellow-800'
     };
@@ -287,7 +290,15 @@ const SubscriptionManagement: React.FC = () => {
           )}
 
           {activeTab === 'plans' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <>
+              {plans.length === 0 ? (
+                <div className="text-center py-12">
+                  <CreditCard className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Plans Available</h3>
+                  <p className="text-gray-600">Contact support to set up subscription plans for your organization</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {plans.map((plan) => (
                 <div key={plan.id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
                   <div className="p-6">
@@ -339,59 +350,93 @@ const SubscriptionManagement: React.FC = () => {
                   </div>
                 </div>
               ))}
-            </div>
+                </div>
+              )}
+            </>
           )}
 
           {activeTab === 'invoices' && (
             <div className="space-y-4">
               {invoices.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Invoice #
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Amount
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {invoices.map((invoice) => (
-                        <tr key={invoice.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {invoice.invoice_number}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {formatDate(invoice.invoice_date)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                            ${invoice.amounts.total.toFixed(2)} {invoice.amounts.currency}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {getStatusBadge(invoice.status)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            <button className="text-blue-600 hover:text-blue-800 flex items-center">
-                              <Download className="h-4 w-4 mr-1" />
-                              Download
-                            </button>
-                          </td>
+                <>
+                  {/* Failed Invoices Warning */}
+                  {invoices.filter(inv => inv.status === 'failed' || inv.status === 'overdue').length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                      <div className="flex items-center">
+                        <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                        <div>
+                          <h4 className="text-sm font-medium text-red-800">Failed Payments</h4>
+                          <p className="text-sm text-red-700 mt-1">
+                            You have {invoices.filter(inv => inv.status === 'failed' || inv.status === 'overdue').length} failed or overdue invoice(s). 
+                            Please update your payment method to avoid service interruption.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Invoice #
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Date
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Due Date
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Amount
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {invoices.map((invoice) => (
+                          <tr key={invoice.id} className={`hover:bg-gray-50 ${
+                            invoice.status === 'failed' || invoice.status === 'overdue' ? 'bg-red-50' : ''
+                          }`}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {invoice.invoice_number}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                              {formatDate(invoice.invoice_date)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                              {formatDate(invoice.due_date)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                              ${invoice.amounts.total.toFixed(2)} {invoice.amounts.currency}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {getStatusBadge(invoice.status)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                              <button className="text-blue-600 hover:text-blue-800 inline-flex items-center">
+                                <Download className="h-4 w-4 mr-1" />
+                                Download
+                              </button>
+                              {(invoice.status === 'failed' || invoice.status === 'overdue') && (
+                                <button className="text-green-600 hover:text-green-800 inline-flex items-center ml-2">
+                                  <CreditCard className="h-4 w-4 mr-1" />
+                                  Pay Now
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               ) : (
                 <div className="text-center py-12">
                   <CreditCard className="h-16 w-16 text-gray-400 mx-auto mb-4" />

@@ -80,4 +80,11 @@ urlpatterns = [
     # Additional criteria endpoints
     path('additional/products/', views_simple.get_available_products, name='additional-products'),
     path('additional/formats/', views_simple.get_available_formats, name='additional-formats'),
+    
+    # User management endpoints
+    path('admin/users/create/', views_simple.create_user, name='admin-create-user'),
+    path('admin/users/update/', views_simple.update_user, name='admin-update-user'),
+    path('admin/users/update-status/', views_simple.update_user_status, name='admin-update-user-status'),
+    path('admin/users/delete/', views_simple.delete_user, name='admin-delete-user'),
+    path('admin/users/<int:user_id>/details/', views_simple.get_user_details, name='admin-user-details'),
 ]
