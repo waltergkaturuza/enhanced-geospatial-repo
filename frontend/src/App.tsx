@@ -26,6 +26,7 @@ import ShoppingCartNew from './components/business/ShoppingCartNew';
 import ProductDetail from './components/business/ProductDetail';
 import OrderManagement from './components/business/OrderManagement';
 import Wishlist from './components/business/Wishlist';
+import BusinessIntelligence from './components/business/BusinessIntelligence';
 
 // Admin Components
 import RoleManagement from './components/admin/RoleManagement';
@@ -209,7 +210,7 @@ function App() {
                 element={
                   <ProtectedRoute requiredModules={['analytics']}>
                     <MainNavigation />
-                    <AnalyticsPage />
+                    <BusinessIntelligence />
                   </ProtectedRoute>
                 }
               />
@@ -219,7 +220,7 @@ function App() {
                 element={
                   <ProtectedRoute requiredModules={['business']}>
                     <MainNavigation />
-                    <BusinessPage />
+                    <BusinessIntelligence />
                   </ProtectedRoute>
                 }
               />

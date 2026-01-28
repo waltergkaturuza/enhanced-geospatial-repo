@@ -6,6 +6,7 @@ from . import ai_metadata_extractor
 from . import enhanced_views
 from . import auth_views
 from . import store_views
+from . import analytics_views
 
 # API URL patterns for the geospatial application
 urlpatterns = [
@@ -113,4 +114,18 @@ urlpatterns = [
     # Wishlist
     path('store/wishlist/', store_views.get_wishlist, name='store-wishlist'),
     path('store/wishlist/toggle/', store_views.toggle_wishlist, name='store-wishlist-toggle'),
+    
+    # Business Intelligence & Analytics
+    path('analytics/dashboard/', analytics_views.get_dashboard_overview, name='analytics-dashboard'),
+    path('analytics/realtime/', analytics_views.get_realtime_metrics, name='analytics-realtime'),
+    path('analytics/users/', analytics_views.get_user_analytics, name='analytics-users'),
+    path('analytics/sales/', analytics_views.get_sales_analytics, name='analytics-sales'),
+    path('analytics/products/', analytics_views.get_product_analytics, name='analytics-products'),
+    path('analytics/geospatial/', analytics_views.get_geospatial_analytics, name='analytics-geospatial'),
+    path('analytics/insights/', analytics_views.get_ai_insights, name='analytics-insights'),
+    path('analytics/track-event/', analytics_views.track_event, name='analytics-track-event'),
+    path('analytics/reports/', analytics_views.get_reports, name='analytics-reports'),
+    path('analytics/reports/generate/', analytics_views.generate_report, name='analytics-generate-report'),
+    path('analytics/export/', analytics_views.export_data, name='analytics-export'),
+    path('analytics/dashboards/', analytics_views.manage_dashboards, name='analytics-dashboards'),
 ]
