@@ -9,7 +9,7 @@ import django.core.validators
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('imagery', '0005_subscriptionplan_subscriptionquota_usersubscription_invoice_supportrequest_supportmessage'),
+        ('imagery', '0006_supportrequest_supportmessage_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
