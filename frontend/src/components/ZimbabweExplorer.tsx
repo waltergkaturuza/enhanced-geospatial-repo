@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Navigation from './Navigation';
 import Sidebar from './Sidebar';
@@ -6,6 +6,39 @@ import MapContainer from './MapContainer';
 import AdditionalTab from './AdditionalTab';
 import { GeospatialAPI } from '@/lib/api';
 import { useAppState, useSearchHandlers, useMapState, useAreaSelection } from '@/hooks';
+import type { AreaOfInterest } from '@/types';
+
+function getSearchBbox(
+  areasOfInterest: AreaOfInterest[],
+  coordinateInputs: { latitude: string; longitude: string; latitudeMax: string; longitudeMax: string }
+): { min_lon: number; min_lat: number; max_lon: number; max_lat: number } | undefined {
+  if (areasOfInterest.length > 0) {
+    const aoi = areasOfInterest[areasOfInterest.length - 1];
+    if (aoi.bounds && aoi.bounds.length === 4) {
+      const [a, b, c, d] = aoi.bounds;
+      // Support [min_lat, min_lon, max_lat, max_lon] or [west, south, east, north]
+      if (Math.abs(a) <= 90) {
+        return { min_lat: a, min_lon: b, max_lat: c, max_lon: d };
+      }
+      return { min_lon: a, min_lat: b, max_lon: c, max_lat: d };
+    }
+  }
+  if (coordinateInputs.latitude && coordinateInputs.longitude) {
+    const min_lat = parseFloat(coordinateInputs.latitude);
+    const min_lon = parseFloat(coordinateInputs.longitude);
+    const max_lat = coordinateInputs.latitudeMax ? parseFloat(coordinateInputs.latitudeMax) : min_lat;
+    const max_lon = coordinateInputs.longitudeMax ? parseFloat(coordinateInputs.longitudeMax) : min_lon;
+    if (!Number.isNaN(min_lat) && !Number.isNaN(min_lon)) {
+      return {
+        min_lat: Math.min(min_lat, max_lat),
+        max_lat: Math.max(min_lat, max_lat),
+        min_lon: Math.min(min_lon, max_lon),
+        max_lon: Math.max(min_lon, max_lon),
+      };
+    }
+  }
+  return undefined;
+}
 
 const ZimbabweExplorer: React.FC = () => {
   // Main application state
@@ -24,27 +57,48 @@ const ZimbabweExplorer: React.FC = () => {
 
   // Search for imagery
   const { data: imagery, isLoading, error: searchError, refetch } = useQuery({
-    queryKey: ['zimbabwe-imagery', appState.searchCriteria],
+    queryKey: ['zimbabwe-imagery', appState.searchCriteria, areaSelection.areasOfInterest],
     queryFn: async () => {
       if (appState.selectedDatasets.length === 0) return { results: [], count: 0 };
-      
+
+      const bbox = getSearchBbox(areaSelection.areasOfInterest, areaSelection.coordinateInputs);
+
       const result = await GeospatialAPI.searchImageryByLocation({
         location: appState.searchCriteria.location,
         start_date: appState.searchCriteria.dateRange.start,
         end_date: appState.searchCriteria.dateRange.end,
         providers: appState.selectedDatasets,
         max_cloud_cover: appState.searchCriteria.cloudCover,
-        max_results: appState.searchCriteria.resultsLimit
+        max_results: appState.searchCriteria.resultsLimit,
+        bbox,
       });
-      
-      // Ensure the result has both results and count properties
+
+      const results = (result.results || []).map((r: any) => ({
+        ...r,
+        id: String(r.id),
+        preview: r.preview || r.thumbnail_url,
+        downloadUrl: r.downloadUrl || r.download_url,
+        file_size_mb: r.file_size_mb ?? r.metadata?.file_size_mb,
+        resolution: r.resolution || r.metadata?.resolution || 'N/A',
+        cloudCover: r.cloudCover ?? r.cloud_cover,
+      }));
+
       return {
-        results: result.results || [],
-        count: result.count || result.results?.length || 0
+        results,
+        count: result.count || results.length,
+        source: result.source,
       };
     },
     enabled: false
   });
+
+  const handleDownload = useCallback((result: { id: string; downloadUrl?: string }) => {
+    if (result.downloadUrl) {
+      window.open(result.downloadUrl, '_blank');
+    } else {
+      GeospatialAPI.downloadLocalImagery(Number(result.id));
+    }
+  }, []);
 
   const handleSearch = () => {
     refetch();
@@ -112,6 +166,7 @@ const ZimbabweExplorer: React.FC = () => {
           searchResults={imagery?.results || []}
           isLoading={isLoading}
           searchError={searchError?.message || null}
+          onDownload={handleDownload}
         />
 
         <MapContainer

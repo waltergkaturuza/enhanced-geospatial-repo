@@ -197,6 +197,11 @@ GEOSPATIAL_SETTINGS = {
     'IMAGERY_ROOT': os.path.join(BASE_DIR, 'data', 'imagery'),
     'PROCESSED_ROOT': os.path.join(BASE_DIR, 'data', 'processed'),
     'CACHE_ROOT': os.path.join(BASE_DIR, 'data', 'cache'),
+    # Local archive browsing (mirrors server/ prototype for localhost)
+    'LOCAL_IMAGERY_ROOT': os.path.join(BASE_DIR, 'data'),
+    'LOCAL_THUMBNAIL_ROOT': os.path.join(BASE_DIR, 'data', 'thumbnails'),
+    'LOCAL_IMAGERY_WATCHER_STATUS': os.path.join(BASE_DIR, 'data', 'watcher_status.json'),
+    'LOCAL_IMAGERY_BASE_URL': config('LOCAL_IMAGERY_BASE_URL', default='http://localhost:8000'),
     
     # Satellite data providers
     'SATELLITE_PROVIDERS': {

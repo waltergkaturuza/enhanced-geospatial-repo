@@ -48,6 +48,7 @@ interface SidebarProps {
   searchResults?: any[];
   isLoading?: boolean;
   searchError?: string | null;
+  onDownload?: (result: any) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = (props) => {
@@ -111,7 +112,7 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
             searchResults={props.searchResults || []}
             isLoading={props.isLoading || false}
             searchError={props.searchError || null}
-            onDownload={(result) => console.log('Download:', result)}
+            onDownload={props.onDownload || ((result) => console.log('Download:', result))}
             onPreview={(result) => console.log('Preview:', result)}
           />
         )}

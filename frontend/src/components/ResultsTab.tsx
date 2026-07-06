@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { Download, Eye, MapPin, Calendar, CloudRain, Image, FileText, Settings } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Download, Eye, MapPin, Calendar, CloudRain, Image, FileText, Settings, HardDrive, AlertTriangle } from 'lucide-react';
+import { formatStorageSize } from '@/constants';
+import { GeospatialAPI } from '@/lib/api';
 
 interface SearchResult {
   id: string;
@@ -12,7 +14,20 @@ interface SearchResult {
   size: string;
   preview: string;
   downloadUrl: string;
+  file_size_mb?: number;
   metadata: any;
+}
+
+interface StorageSummary {
+  scene_count: number;
+  total_size_mb: number;
+  total_size_gb: number;
+  by_satellite_mb: Record<string, number>;
+  by_payload_mb: Record<string, number>;
+  disk_free_gb: number;
+  disk_total_gb: number;
+  fits_on_disk: boolean;
+  storage_warning?: string | null;
 }
 
 interface ResultsTabProps {
@@ -34,6 +49,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedResults, setSelectedResults] = useState<string[]>([]);
   const [showMetadata, setShowMetadata] = useState<string | null>(null);
+  const [storageSummary, setStorageSummary] = useState<StorageSummary | null>(null);
 
   const sortedResults = [...searchResults].sort((a, b) => {
     let comparison = 0;
@@ -50,6 +66,29 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
     }
     return sortOrder === 'asc' ? comparison : -comparison;
   });
+
+  const selectedItems = useMemo(
+    () => searchResults.filter(r => selectedResults.includes(r.id)),
+    [searchResults, selectedResults]
+  );
+
+  const localTotalMb = useMemo(
+    () => selectedItems.reduce((sum, r) => sum + (r.file_size_mb || r.metadata?.file_size_mb || 0), 0),
+    [selectedItems]
+  );
+
+  useEffect(() => {
+    if (selectedResults.length === 0) {
+      setStorageSummary(null);
+      return;
+    }
+    const ids = selectedResults.map(id => Number(id)).filter(n => !Number.isNaN(n));
+    if (ids.length === 0) return;
+
+    GeospatialAPI.getSelectionStorageSummary(ids)
+      .then(setStorageSummary)
+      .catch(() => setStorageSummary(null));
+  }, [selectedResults]);
 
   const toggleSelectResult = (id: string) => {
     setSelectedResults(prev =>
@@ -68,8 +107,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
   };
 
   const downloadSelected = () => {
-    const selected = searchResults.filter(r => selectedResults.includes(r.id));
-    selected.forEach(result => onDownload(result));
+    selectedItems.forEach(result => onDownload(result));
   };
 
   if (isLoading) {
@@ -115,7 +153,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
           4. Search Results
         </h2>
         <p className="text-xs text-gray-600 mt-1 leading-tight">
-          {searchResults.length} images found. Select and download your data.
+          {searchResults.length} images found. Select scenes and review total storage before download.
         </p>
       </div>
 
@@ -123,7 +161,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
         <div className="p-4 text-center text-gray-500">
           <Image className="h-12 w-12 mx-auto mb-2 text-gray-400" />
           <p className="text-sm">No results found</p>
-          <p className="text-xs mt-1">Try adjusting your search criteria</p>
+          <p className="text-xs mt-1">Run ingest on data/ archives or adjust search criteria</p>
         </div>
       ) : (
         <div className="p-3 space-y-3">
@@ -170,6 +208,39 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Storage Summary for Selection */}
+          {selectedResults.length > 0 && (
+            <div className={`rounded border p-2 text-xs ${storageSummary?.fits_on_disk === false ? 'bg-amber-50 border-amber-300' : 'bg-green-50 border-green-200'}`}>
+              <div className="flex items-center space-x-1 font-medium text-gray-800 mb-1">
+                <HardDrive className="h-3 w-3" />
+                <span>Selected Storage Summary</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1 text-gray-700">
+                <span>Scenes: <strong>{selectedResults.length}</strong></span>
+                <span>Total size: <strong>{formatStorageSize(storageSummary?.total_size_mb ?? localTotalMb)}</strong></span>
+                {storageSummary && (
+                  <>
+                    <span>Disk free: <strong>{storageSummary.disk_free_gb} GB</strong></span>
+                    <span>Disk total: <strong>{storageSummary.disk_total_gb} GB</strong></span>
+                  </>
+                )}
+              </div>
+              {storageSummary?.by_satellite_mb && Object.keys(storageSummary.by_satellite_mb).length > 0 && (
+                <div className="mt-1 pt-1 border-t border-green-200 text-gray-600">
+                  {Object.entries(storageSummary.by_satellite_mb).map(([sat, mb]) => (
+                    <span key={sat} className="inline-block mr-2">{sat}: {formatStorageSize(mb)}</span>
+                  ))}
+                </div>
+              )}
+              {storageSummary?.storage_warning && (
+                <div className="mt-1 flex items-start space-x-1 text-amber-700">
+                  <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                  <span>{storageSummary.storage_warning}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Results List */}
           <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -242,7 +313,6 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                         </span>
                       </div>
 
-                      {/* Metadata Panel */}
                       {showMetadata === result.id && (
                         <div className="mt-3 p-2 bg-gray-50 rounded border text-xs">
                           <h5 className="font-medium text-gray-700 mb-2">Metadata</h5>
@@ -271,6 +341,12 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
               <span>Total Results: {searchResults.length}</span>
               <span>Selected: {selectedResults.length}</span>
             </div>
+            {selectedResults.length > 0 && (
+              <div className="flex justify-between mt-1 font-medium text-gray-800">
+                <span>Selected storage</span>
+                <span>{formatStorageSize(storageSummary?.total_size_mb ?? localTotalMb)}</span>
+              </div>
+            )}
           </div>
         </div>
       )}

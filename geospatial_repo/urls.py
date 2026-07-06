@@ -19,12 +19,13 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from . import views
+from imagery import local_imagery_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('imagery.urls')),
-    # Note: Frontend is deployed separately on Render as a static site
-    # This backend only serves API and admin routes
+    # Local archive thumbnails (mirrors server/ prototype)
+    re_path(r'^thumbnails/(?P<path>.*)$', local_imagery_views.serve_thumbnail),
 ]
 
 # Serve static files in development

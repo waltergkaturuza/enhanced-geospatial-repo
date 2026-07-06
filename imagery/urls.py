@@ -7,6 +7,7 @@ from . import enhanced_views
 from . import auth_views
 from . import store_views
 from . import analytics_views
+from . import local_imagery_views
 
 # API URL patterns for the geospatial application
 urlpatterns = [
@@ -82,6 +83,15 @@ urlpatterns = [
     # Additional criteria endpoints
     path('additional/products/', views_simple.get_available_products, name='additional-products'),
     path('additional/formats/', views_simple.get_available_formats, name='additional-formats'),
+
+    # Local imagery archive (mirrors server/ prototype — localhost)
+    path('imagery/search/', local_imagery_views.imagery_search, name='imagery-search'),
+    path('local-imagery/search/', local_imagery_views.local_imagery_search, name='local-imagery-search'),
+    path('local-imagery/download/<int:image_id>/', local_imagery_views.local_imagery_download, name='local-imagery-download'),
+    path('local-imagery/watcher/status/', local_imagery_views.watcher_status, name='local-imagery-watcher-status'),
+    path('local-imagery/ingest/', local_imagery_views.trigger_ingest, name='local-imagery-ingest'),
+    path('local-imagery/catalog/', local_imagery_views.lasac_catalog, name='local-imagery-catalog'),
+    path('local-imagery/selection/summary/', local_imagery_views.selection_storage_summary, name='local-imagery-selection-summary'),
     
     # User management endpoints
     path('admin/users/create/', views_simple.create_user, name='admin-create-user'),

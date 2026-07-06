@@ -12,6 +12,7 @@ import {
   User
 } from 'lucide-react';
 import axios from 'axios';
+import { getAuthHeaders } from '@/lib/api';
 
 interface SupportRequest {
   id: number;
@@ -58,7 +59,7 @@ interface RequestDetail extends SupportRequest {
 }
 
 const SupportRequests: React.FC = () => {
-  const { token, user } = useAuthContext();
+  const { hasPermission } = useAuthContext();
   const [requests, setRequests] = useState<SupportRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<RequestDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,7 +84,7 @@ const SupportRequests: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const headers = { Authorization: `Token ${token}` };
+      const headers = getAuthHeaders() as Record<string, string>;
       const params = statusFilter ? { status: statusFilter } : {};
       
       const response = await axios.get('/api/support/requests/', { headers, params });
@@ -99,7 +100,7 @@ const SupportRequests: React.FC = () => {
 
   const loadRequestDetail = async (requestId: number) => {
     try {
-      const headers = { Authorization: `Token ${token}` };
+      const headers = getAuthHeaders() as Record<string, string>;
       const response = await axios.get(`/api/support/requests/${requestId}/`, { headers });
       setSelectedRequest(response.data.data);
     } catch (error) {
@@ -110,7 +111,7 @@ const SupportRequests: React.FC = () => {
   const createRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const headers = { Authorization: `Token ${token}` };
+      const headers = getAuthHeaders() as Record<string, string>;
       await axios.post('/api/support/requests/', newRequest, { headers });
       
       setShowNewRequestModal(false);
@@ -131,7 +132,7 @@ const SupportRequests: React.FC = () => {
     if (!selectedRequest || !newMessage.trim()) return;
 
     try {
-      const headers = { Authorization: `Token ${token}` };
+      const headers = getAuthHeaders() as Record<string, string>;
       await axios.post(
         `/api/support/requests/${selectedRequest.id}/`,
         { message: newMessage },
@@ -148,7 +149,7 @@ const SupportRequests: React.FC = () => {
 
   const updateRequestStatus = async (requestId: number, status: string) => {
     try {
-      const headers = { Authorization: `Token ${token}` };
+      const headers = getAuthHeaders() as Record<string, string>;
       await axios.put(
         `/api/support/requests/${requestId}/`,
         { status },
@@ -336,7 +337,7 @@ const SupportRequests: React.FC = () => {
                   </div>
                 </div>
 
-                {(user?.is_staff || user?.is_superuser) && (
+                {hasPermission('system_management') && (
                   <div className="mt-4 flex space-x-2">
                     <select
                       value={selectedRequest.status}

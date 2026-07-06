@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ZIMBABWE_COORDINATES } from '../constants';
+import { LASAC_SATELLITE_IDS } from '@/constants';
 
 export const useSearchHandlers = (appState: any) => {
   const [isSearching, setIsSearching] = useState(false);
@@ -52,13 +53,13 @@ export const useSearchHandlers = (appState: any) => {
         start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         end: new Date().toISOString().split('T')[0]
       },
-      datasets: ['zimsat2', 'sentinel2_msi', 'landsat9'],
+      datasets: [...LASAC_SATELLITE_IDS],
       cloudCover: 30,
       resultsLimit: 100,
       selectedFormats: {},
       selectedProducts: {}
     });
-    appState.setSelectedDatasets(['zimsat2', 'sentinel2_msi', 'landsat9']);
+    appState.setSelectedDatasets([...LASAC_SATELLITE_IDS]);
     setSearchError(null);
   };
 

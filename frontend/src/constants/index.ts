@@ -1,5 +1,13 @@
 import type { CoordinateSystem, ZimbabweDataset, MapViewState, DatasetMetadata } from '../types';
 
+export {
+  LASAC_SATELLITE_GROUPS,
+  LASAC_SATELLITE_IDS,
+  LASAC_SATELLITE_MAP,
+  formatStorageSize,
+} from './lasacCatalog';
+export type { LasacSatellite, LasacSatelliteGroup } from './lasacCatalog';
+
 export const ZIMBABWE_PROVINCES = [
   'All Zimbabwe',
   'Harare',

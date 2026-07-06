@@ -1333,4 +1333,3 @@ def update_order_status(sender, instance, created, **kwargs):
         if instance.status == 'pending':
             instance.status = 'paid'
             instance.save(update_fields=['status'])
-

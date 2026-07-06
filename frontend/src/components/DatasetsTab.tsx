@@ -1,6 +1,6 @@
 import React from 'react';
-import { ChevronDown, ChevronRight, Info, Satellite, Database, Globe, Eye } from 'lucide-react';
-import { ZIMBABWE_DATASETS, DATASET_METADATA } from '@/constants';
+import { ChevronDown, ChevronRight, Info, Satellite, Database, Globe, Eye, HardDrive } from 'lucide-react';
+import { ZIMBABWE_DATASETS, DATASET_METADATA, LASAC_SATELLITE_GROUPS, LASAC_SATELLITE_IDS } from '@/constants';
 
 interface DatasetsTabProps {
   selectedDatasets: string[];
@@ -95,6 +95,16 @@ const DatasetsTab: React.FC<DatasetsTabProps> = ({
     }
   };
 
+  const lasacSelectedCount = selectedDatasets.filter(id => LASAC_SATELLITE_IDS.includes(id)).length;
+
+  const toggleLasacGroup = (satelliteIds: string[], select: boolean) => {
+    if (select) {
+      setSelectedDatasets([...new Set([...selectedDatasets, ...satelliteIds])]);
+    } else {
+      setSelectedDatasets(selectedDatasets.filter(id => !satelliteIds.includes(id)));
+    }
+  };
+
   return (
     <div>
       <div className="bg-gray-200 border-b border-gray-300 px-3 py-2">
@@ -102,18 +112,85 @@ const DatasetsTab: React.FC<DatasetsTabProps> = ({
           2. Data Sets
         </h2>
         <p className="text-xs text-gray-600 mt-1 leading-tight">
-          Choose the satellite and airborne datasets to include in your search. 
-          Zimbabwe data from multiple providers including local microsatellites, international missions, and UAV platforms.
-          Select the data sets you would like to search. Click on items for detailed metadata.
+          Select LASAC local archive satellites (GaoFen / ZiYuan payloads) or additional remote datasets.
+          Local scenes are served from indexed .tar.gz archives on disk.
         </p>
       </div>
 
       <div className="p-3 space-y-3">
+        {/* LASAC Local Archive */}
+        <div className="border-2 border-blue-300 rounded-lg overflow-hidden">
+          <div className="bg-blue-600 text-white px-3 py-2 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <HardDrive className="h-4 w-4" />
+              <span className="text-xs font-semibold">LASAC Local Archive</span>
+            </div>
+            <span className="text-xs">{lasacSelectedCount}/{LASAC_SATELLITE_IDS.length} selected</span>
+          </div>
+          <div className="p-2 bg-blue-50 flex space-x-1 border-b border-blue-200">
+            <button
+              onClick={() => setSelectedDatasets([...LASAC_SATELLITE_IDS])}
+              className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Select All LASAC
+            </button>
+            <button
+              onClick={() => setSelectedDatasets(selectedDatasets.filter(id => !LASAC_SATELLITE_IDS.includes(id)))}
+              className="text-xs px-2 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+            >
+              Clear LASAC
+            </button>
+          </div>
+          {LASAC_SATELLITE_GROUPS.map(group => {
+            const groupIds = group.satellites.map(s => s.id);
+            const checkedCount = groupIds.filter(id => selectedDatasets.includes(id)).length;
+            const allChecked = checkedCount === groupIds.length;
+            return (
+              <div key={group.id} className="border-b border-blue-100 last:border-b-0">
+                <div className="px-3 py-2 bg-white flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-800">{group.name}</h3>
+                    <p className="text-xs text-gray-500">{group.description}</p>
+                  </div>
+                  <button
+                    onClick={() => toggleLasacGroup(groupIds, !allChecked)}
+                    className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                  >
+                    {allChecked ? 'Deselect' : 'Select'} Group
+                  </button>
+                </div>
+                <div className="px-3 pb-2 space-y-1">
+                  {group.satellites.map(sat => (
+                    <label
+                      key={sat.id}
+                      className="flex items-center space-x-2 p-2 rounded hover:bg-blue-50 cursor-pointer text-xs"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedDatasets.includes(sat.id)}
+                        onChange={() => toggleDataset(sat.id)}
+                        className="h-3 w-3 text-blue-600 rounded"
+                      />
+                      <span
+                        className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: sat.color }}
+                      />
+                      <span className="font-medium text-gray-900 min-w-[52px]">{sat.id}</span>
+                      <span className="text-gray-600 truncate">{sat.label}</span>
+                      <span className="text-gray-400 ml-auto whitespace-nowrap">{sat.sensor} · {sat.resolution}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
         {/* Selection Summary */}
         <div className="bg-blue-50 border border-blue-200 rounded p-2 mb-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-blue-800">
-              {selectedDatasets.length} of {ZIMBABWE_DATASETS.length} datasets selected
+              {selectedDatasets.length} datasets selected ({lasacSelectedCount} LASAC)
             </span>
             <div className="flex space-x-1">
               <button

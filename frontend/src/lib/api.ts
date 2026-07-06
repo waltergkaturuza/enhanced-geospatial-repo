@@ -422,7 +422,7 @@ export class GeospatialAPI {
     return response.data;
   }
 
-  // Search imagery by location (for Zimbabwe Explorer)
+  // Search imagery by location (local archive — mirrors server/ prototype)
   static async searchImageryByLocation(params: {
     location?: string;
     start_date?: string;
@@ -430,72 +430,60 @@ export class GeospatialAPI {
     providers?: string[];
     max_cloud_cover?: number;
     max_results?: number;
-  }): Promise<{ count: number; results: any[] }> {
-    try {
-      const response = await apiClient.post('/imagery/search/', {
-        geometry: null, // Will be enhanced with actual location geometry
-        start_date: params.start_date,
-        end_date: params.end_date,
-        providers: params.providers || ['sentinel2'],
-        max_cloud_cover: params.max_cloud_cover || 30,
-        max_results: params.max_results || 100,
-        location: params.location,
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Failed to search imagery by location:', error);
-      // Return mock data for Zimbabwe for testing
-      return {
-        count: 5,
-        results: [
-          {
-            id: 1,
-            tile_id: 'S2A_MSIL2A_20241201T073331_N0511_R092_T36KTF_20241201T094529',
-            provider: 'Sentinel-2',
-            sensed_at: '2024-12-01T07:33:31Z',
-            cloud_cover: 15.2,
-            bounds: [-19.5, 29.0, -18.5, 30.0],
-            file_size_mb: 512.3,
-          },
-          {
-            id: 2,
-            tile_id: 'LC08_L2SP_170071_20241128_20241202_02_T1',
-            provider: 'Landsat-8',
-            sensed_at: '2024-11-28T08:45:12Z',
-            cloud_cover: 8.7,
-            bounds: [-20.0, 28.5, -19.0, 29.5],
-            file_size_mb: 298.1,
-          },
-          {
-            id: 3,
-            tile_id: 'S1A_IW_GRDH_1SDV_20241125T041256_20241125T041321_056324_06E5A2_9C4E',
-            provider: 'Sentinel-1',
-            sensed_at: '2024-11-25T04:12:56Z',
-            cloud_cover: 0,
-            bounds: [-19.2, 29.3, -18.2, 30.3],
-            file_size_mb: 156.7,
-          },
-          {
-            id: 4,
-            tile_id: 'MOD09GA.A2024330.h20v10.061.2024331180532',
-            provider: 'MODIS',
-            sensed_at: '2024-11-25T00:00:00Z',
-            cloud_cover: 25.1,
-            bounds: [-21.0, 28.0, -17.0, 32.0],
-            file_size_mb: 45.2,
-          },
-          {
-            id: 5,
-            tile_id: 'S2B_MSIL2A_20241120T073339_N0511_R092_T36KTF_20241120T094842',
-            provider: 'Sentinel-2',
-            sensed_at: '2024-11-20T07:33:39Z',
-            cloud_cover: 42.8,
-            bounds: [-19.5, 29.0, -18.5, 30.0],
-            file_size_mb: 487.9,
-          },
-        ],
-      };
-    }
+    bbox?: { min_lon: number; min_lat: number; max_lon: number; max_lat: number };
+    geometry?: GeoJSON.Polygon | GeoJSON.Feature | null;
+  }): Promise<{ count: number; results: any[]; source?: string }> {
+    const response = await apiClient.post('/imagery/search/', {
+      geometry: params.geometry ?? null,
+      bbox: params.bbox ?? null,
+      start_date: params.start_date,
+      end_date: params.end_date,
+      providers: params.providers,
+      max_cloud_cover: params.max_cloud_cover ?? 30,
+      max_results: params.max_results ?? 100,
+      location: params.location,
+    });
+    return response.data;
+  }
+
+  static async searchLocalImageryGeoJSON(params: Record<string, string | number>): Promise<GeoJSON.FeatureCollection> {
+    const response = await apiClient.get('/local-imagery/search/', { params });
+    return response.data;
+  }
+
+  static async downloadLocalImagery(imageId: number): Promise<void> {
+    const base = getApiBaseUrl().replace(/\/api$/, '');
+    window.open(`${base}/api/local-imagery/download/${imageId}/`, '_blank');
+  }
+
+  static async triggerLocalIngest(): Promise<{ ingested: number; message: string }> {
+    const response = await apiClient.post('/local-imagery/ingest/');
+    return response.data;
+  }
+
+  static async getLocalWatcherStatus(): Promise<Record<string, unknown>> {
+    const response = await apiClient.get('/local-imagery/watcher/status/');
+    return response.data;
+  }
+
+  static async getSelectionStorageSummary(ids: number[]): Promise<{
+    scene_count: number;
+    total_size_mb: number;
+    total_size_gb: number;
+    by_satellite_mb: Record<string, number>;
+    by_payload_mb: Record<string, number>;
+    disk_free_gb: number;
+    disk_total_gb: number;
+    fits_on_disk: boolean;
+    storage_warning?: string | null;
+  }> {
+    const response = await apiClient.post('/local-imagery/selection/summary/', { ids });
+    return response.data;
+  }
+
+  static async getLasacCatalog(): Promise<{ groups: unknown[]; satellite_ids: string[] }> {
+    const response = await apiClient.get('/local-imagery/catalog/');
+    return response.data;
   }
 
   // Authentication methods
